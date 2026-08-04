@@ -11,15 +11,24 @@ import (
 )
 
 type Config struct {
-	Listen         string        `json:"listen"`
-	Root           string        `json:"root"`
-	Token          string        `json:"token"`
-	CertFile       string        `json:"cert_file"`
-	KeyFile        string        `json:"key_file"`
-	LogFile        string        `json:"log_file,omitempty"`
-	MaxUploadBytes int64         `json:"max_upload_bytes"`
+	Listen         string `json:"listen"`
+	Root           string `json:"root"`
+	Token          string `json:"token"`
+	CertFile       string `json:"cert_file"`
+	KeyFile        string `json:"key_file"`
+	LogFile        string `json:"log_file,omitempty"`
+	MaxUploadBytes int64  `json:"max_upload_bytes"`
+	// Advertise 控制是否在局域网内用 mDNS 公告自己；为空视为开启。
+	Advertise *bool `json:"advertise,omitempty"`
+	// InstanceName 是公告用的实例名，为空时取主机名。
+	InstanceName   string        `json:"instance_name,omitempty"`
 	CommandTimeout time.Duration `json:"-"`
 	TimeoutText    string        `json:"command_timeout"`
+}
+
+// AdvertiseEnabled 在旧配置没有该字段时默认开启，保持"重启换 IP 也能被找到"。
+func (c Config) AdvertiseEnabled() bool {
+	return c.Advertise == nil || *c.Advertise
 }
 
 func DefaultPath() string {
