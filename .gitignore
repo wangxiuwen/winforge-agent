@@ -1,0 +1,9 @@
+/dist/
+/build/
+*.exe
+*.test
+.DS_Store
+.env
+config.json
+profiles/
+
