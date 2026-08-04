@@ -13,6 +13,7 @@ WinForge 是一个 Go 单二进制：同一程序在 Windows 上运行 Agent，�
 - 实时返回 stdout/stderr，支持超时和取消；
 - 原子上传、下载和目录创建；
 - Windows 服务安装/卸载；
+- 局域网 mDNS/DNS-SD 发现，构建机重启换 IP 后自动重新定位；
 - Windows/macOS/Linux amd64/arm64 构建。
 
 ## Windows：初始化并启动
@@ -35,8 +36,10 @@ winforge.exe service install --config C:\ProgramData\WinForge\config.json
 ## Mac：配对并操作
 
 ```bash
+winforge discover                     # 列出局域网内的 Agent
+
 winforge pair windows-lab \
-  --host https://192.0.2.50:9443 \
+  --instance '<discover 里的实例名>' \
   --token '<Windows init 输出>' \
   --fingerprint '<Windows init 输出>'
 
@@ -46,6 +49,21 @@ winforge upload --profile windows-lab ./firmware.zip firmware/firmware.zip
 winforge exec --profile windows-lab --cwd firmware -- powershell.exe -NoProfile -File build.ps1
 winforge download --profile windows-lab firmware/out/app.bin ./app.bin
 ```
+
+固定 IP 也可以：把 `--instance` 换成 `--host https://192.0.2.50:9443`。两个一起给，
+则平时走固定地址，连不上时才回退到发现。
+
+## 局域网发现
+
+Agent 默认用 mDNS/DNS-SD 公告 `_winforge._tcp`，实例名取主机名，可用 `instance_name` 配置项改，
+`"advertise": false` 可完全关闭。公告内容只有实例名、主机名、端口和证书指纹，不含 token 和任何路径。
+
+profile 里记了实例名后，客户端在原地址连不上时会自动在局域网里重新找一次——这正是构建机
+重启后 DHCP 换了地址的场景。发现结果按不可信数据处理：候选地址必须先通过固定的证书指纹校验，
+再成功调用一次 `status`，才会被写回 profile；指纹对不上的实例直接跳过，token 不会发给它。
+指纹本身永远来自 Agent `init` 的带外输出，不从公告里采信。
+
+多播不跨路由，也可能被 AP 的客户端隔离挡掉；这种情况下继续用 `--host`。
 
 需要 shell 语法时必须显式调用 `cmd.exe /C` 或 `powershell.exe -Command`，Agent 不会偷偷拼 shell。
 

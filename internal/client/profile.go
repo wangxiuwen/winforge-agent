@@ -12,11 +12,18 @@ type Profile struct {
 	Host        string `json:"host"`
 	Token       string `json:"token"`
 	Fingerprint string `json:"fingerprint"`
+	// Instance 是 mDNS 实例名。填了它，Host 因为 DHCP 变化而连不上时可以自动重新解析。
+	Instance string `json:"instance,omitempty"`
 }
 
 var profileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
+// ProfilesDir 返回 profile 存放目录。
+// WINFORGE_HOME 可以覆盖它，便于隔离多套配置，测试也用它避免写到用户真实目录。
 func ProfilesDir() string {
+	if base := os.Getenv("WINFORGE_HOME"); base != "" {
+		return filepath.Join(base, "profiles")
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "profiles"

@@ -9,12 +9,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/wangxiuwen/winforge-agent/internal/agent"
 	"github.com/wangxiuwen/winforge-agent/internal/client"
 	"github.com/wangxiuwen/winforge-agent/internal/config"
+	"github.com/wangxiuwen/winforge-agent/internal/discovery"
 	"github.com/wangxiuwen/winforge-agent/internal/security"
 )
 
@@ -38,6 +40,8 @@ func main() {
 		err = runInit(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
+	case "discover":
+		err = runDiscover(os.Args[2:])
 	case "pair":
 		err = runPair(os.Args[2:])
 	case "status":
@@ -79,7 +83,8 @@ Windows:
   winforge rotate-token [--config FILE]
 
 Mac/Linux:
-  winforge pair NAME --host URL --token TOKEN --fingerprint SHA256
+  winforge discover [--timeout 3s]
+  winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256
   winforge status --profile NAME
   winforge mkdir --profile NAME REMOTE_DIR
   winforge upload --profile NAME LOCAL REMOTE
@@ -160,7 +165,66 @@ func serveConfig(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	if cfg.AdvertiseEnabled() {
+		advertiseCtx, stopAdvertise := context.WithCancel(ctx)
+		defer stopAdvertise()
+		go func() {
+			if err := advertise(advertiseCtx, cfg, logger); err != nil && advertiseCtx.Err() == nil {
+				logger.Printf("mDNS 公告已停止: %v", err)
+			}
+		}()
+	}
 	return server.ListenAndServe(ctx)
+}
+
+// advertise 只公告实例名、主机名、端口和证书指纹，不公告 token 或任何路径。
+func advertise(ctx context.Context, cfg config.Config, logger *log.Logger) error {
+	fingerprint, err := security.CertificateFingerprint(cfg.CertFile)
+	if err != nil {
+		return err
+	}
+	port, err := strconv.Atoi(listenPort(cfg.Listen))
+	if err != nil {
+		return err
+	}
+	instance := cfg.InstanceName
+	if instance == "" {
+		instance = discovery.DefaultInstanceName()
+	}
+	return discovery.Advertise(ctx, discovery.Service{
+		Instance:    instance,
+		Port:        port,
+		Fingerprint: fingerprint,
+	}, logger)
+}
+
+func runDiscover(args []string) error {
+	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
+	timeout := fs.Duration("timeout", 3*time.Second, "搜索时长")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout+5*time.Second)
+	defer cancel()
+	instances, err := discovery.Browse(ctx, *timeout)
+	if err != nil {
+		return err
+	}
+	if len(instances) == 0 {
+		fmt.Println("未发现 Agent。确认 Agent 已启动、与本机同一网段，且没有被防火墙或 AP 隔离挡住多播。")
+		return nil
+	}
+	for _, instance := range instances {
+		fmt.Printf("%s\n", instance.Name)
+		for _, candidate := range instance.URLs() {
+			fmt.Printf("  host        %s\n", candidate)
+		}
+		if instance.Fingerprint != "" {
+			fmt.Printf("  fingerprint %s\n", instance.Fingerprint)
+		}
+	}
+	fmt.Println("\n公告里的指纹只是提示，配对时请使用 Agent init 输出的指纹。")
+	return nil
 }
 
 func runPair(args []string) error {
@@ -173,6 +237,7 @@ func runPair(args []string) error {
 	}
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	host := fs.String("host", "", "Agent HTTPS URL")
+	instance := fs.String("instance", "", "mDNS 实例名，用它代替固定 IP")
 	token := fs.String("token", "", "配对 token")
 	fingerprint := fs.String("fingerprint", "", "证书 SHA-256 指纹")
 	if err := fs.Parse(args); err != nil {
@@ -182,16 +247,26 @@ func runPair(args []string) error {
 		name = fs.Arg(0)
 	}
 	unexpectedArgs := (nameBeforeFlags && fs.NArg() != 0) || (!nameBeforeFlags && fs.NArg() != 1)
-	if name == "" || unexpectedArgs || *host == "" || *token == "" || *fingerprint == "" {
-		return fmt.Errorf("用法: winforge pair NAME --host URL --token TOKEN --fingerprint SHA256")
+	if name == "" || unexpectedArgs || (*host == "" && *instance == "") ||
+		*token == "" || *fingerprint == "" {
+		return fmt.Errorf("用法: winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256")
 	}
-	profile := client.Profile{Host: *host, Token: *token, Fingerprint: *fingerprint}
+	profile := client.Profile{Host: *host, Token: *token, Fingerprint: *fingerprint, Instance: *instance}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if profile.Host == "" {
+		// 指纹永远来自带外的 init 输出；发现只负责找地址。
+		resolved, err := client.Relocate(ctx, profile, 4*time.Second)
+		if err != nil {
+			return err
+		}
+		profile = resolved
+		fmt.Printf("已通过 mDNS 找到 %s\n", profile.Host)
+	}
 	c, err := client.New(profile)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
 	if err := c.Status(ctx, io.Discard); err != nil {
 		return fmt.Errorf("配对验证失败: %w", err)
 	}
@@ -199,6 +274,9 @@ func runPair(args []string) error {
 		return err
 	}
 	fmt.Printf("已保存 profile %q 到 %s\n", name, client.ProfilesDir())
+	if profile.Instance == "" {
+		fmt.Println("提示: 加 --instance 可在构建机重启换 IP 后自动重新定位。")
+	}
 	return nil
 }
 
@@ -327,11 +405,10 @@ func parseProfile(args []string) (string, []string, error) {
 }
 
 func loadClient(name string) (*client.Client, error) {
-	profile, err := client.LoadProfile(name)
-	if err != nil {
-		return nil, err
-	}
-	return client.New(profile)
+	// 记了 mDNS 实例名时，Host 连不上会先在局域网里重新定位一次。
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return client.Open(ctx, name)
 }
 
 func firstError(actual, fallback error) error {
