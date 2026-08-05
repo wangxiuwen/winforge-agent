@@ -20,12 +20,17 @@ import (
 	"time"
 
 	"github.com/wangxiuwen/winforge-agent/internal/config"
+	"github.com/wangxiuwen/winforge-agent/internal/security"
 )
 
 type Server struct {
 	cfg       config.Config
 	workspace *Workspace
 	logger    *log.Logger
+
+	// 配对码状态。放在 Server 上而不是全局：一个进程可能跑多个实例（测试就是）。
+	pending     PendingPair
+	fingerprint string
 }
 
 type ExecRequest struct {
@@ -51,7 +56,13 @@ func New(cfg config.Config, logger *log.Logger) (*Server, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Server{cfg: cfg, workspace: workspace, logger: logger}, nil
+	fingerprint, err := security.CertificateFingerprint(cfg.CertFile)
+	if err != nil {
+		// 指纹只用于配对时给客户端验证；证书读不到就让配对明确失败，
+		// 而不是发一个空 proof 让客户端以为验过了。
+		logger.Printf("警告: 读取证书指纹失败，配对接口将不可用: %v", err)
+	}
+	return &Server{cfg: cfg, workspace: workspace, logger: logger, fingerprint: fingerprint}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -61,7 +72,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/upload", s.handleUpload)
 	mux.HandleFunc("GET /v1/download", s.handleDownload)
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)
-	return s.logRequests(s.authenticate(mux))
+	mux.HandleFunc("POST /v1/pair-code", s.handleArmPair)
+
+	// /v1/pair 不走 token 校验——它就是用来换 token 的。防线在 PendingPair：
+	// 短时效 + 一次性 + 错几次作废。
+	outer := http.NewServeMux()
+	outer.HandleFunc("POST /v1/pair", s.handlePair)
+	outer.Handle("/", s.authenticate(mux))
+	return s.logRequests(outer)
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {

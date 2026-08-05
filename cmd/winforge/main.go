@@ -42,6 +42,8 @@ func main() {
 		err = runServe(os.Args[2:])
 	case "discover":
 		err = runDiscover(os.Args[2:])
+	case "pair-code":
+		err = runPairCode(os.Args[2:])
 	case "pair":
 		err = runPair(os.Args[2:])
 	case "status":
@@ -80,11 +82,13 @@ Windows:
   winforge init [--config FILE] [--root DIR] [--listen ADDR]
   winforge serve [--config FILE]
   winforge service install|uninstall|start|stop|status [--config FILE]
+  winforge pair-code [--config FILE]        生成 6 位配对码，念给对面即可
   winforge rotate-token [--config FILE]
 
 Mac/Linux:
   winforge discover [--timeout 3s]
-  winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256
+  winforge pair NAME (--host URL | --instance MDNS_NAME) --code 123456
+  winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256   (老办法)
   winforge status --profile NAME
   winforge mkdir --profile NAME REMOTE_DIR
   winforge upload --profile NAME LOCAL REMOTE
@@ -130,7 +134,47 @@ func runInit(args []string) error {
 		return err
 	}
 	fmt.Printf("配置已创建: %s\nworkspace: %s\n证书指纹: %s\n", *configPath, *root, fingerprint)
-	fmt.Printf("\n在 Mac 上通过可信通道执行：\nwinforge pair windows-lab --host https://<WINDOWS-IP>:%s --token %q --fingerprint %s\n", listenPort(*listen), token, fingerprint)
+	fmt.Printf("\n下一步：先 winforge serve 起服务，再执行 winforge pair-code 拿一个 6 位配对码，\n" +
+		"在 Mac 上跑：winforge pair windows-lab --instance <mDNS名> --code 123456\n\n" +
+		"（也可以继续用长凭证手工配对，但要把下面两串都搬过去：）\n")
+	fmt.Printf("winforge pair windows-lab --host https://<WINDOWS-IP>:%s --token %q --fingerprint %s\n", listenPort(*listen), token, fingerprint)
+	return nil
+}
+
+// runPairCode 在 Agent 本机生成配对码。它连的是本机正在跑的服务：配对码必须存在
+// 服务进程里才能被兑换，另起一个进程算出来的码没人认。
+func runPairCode(args []string) error {
+	fs := flag.NewFlagSet("pair-code", flag.ContinueOnError)
+	configPath := fs.String("config", config.DefaultPath(), "配置文件")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		return err
+	}
+	fingerprint, err := security.CertificateFingerprint(cfg.CertFile)
+	if err != nil {
+		return fmt.Errorf("读取证书指纹失败: %w", err)
+	}
+	c, err := client.New(client.Profile{
+		Host:        "https://127.0.0.1:" + listenPort(cfg.Listen),
+		Token:       cfg.Token,
+		Fingerprint: fingerprint,
+	})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	code, expires, err := c.ArmPairCode(ctx)
+	if err != nil {
+		return fmt.Errorf("生成配对码失败（Agent 服务在跑吗？winforge serve）: %w", err)
+	}
+	fmt.Printf("\n    配对码: %s\n\n", code)
+	fmt.Printf("%s 之前有效，只能用一次。在 Mac 上执行：\n", expires.Local().Format("15:04:05"))
+	fmt.Printf("  winforge pair windows-lab --instance <mDNS名> --code %s\n", code)
+	fmt.Printf("\n（不知道 mDNS 名就先跑 winforge discover；也可以用 --host https://<本机IP>:%s）\n", listenPort(cfg.Listen))
 	return nil
 }
 
@@ -238,8 +282,9 @@ func runPair(args []string) error {
 	fs := flag.NewFlagSet("pair", flag.ContinueOnError)
 	host := fs.String("host", "", "Agent HTTPS URL")
 	instance := fs.String("instance", "", "mDNS 实例名，用它代替固定 IP")
-	token := fs.String("token", "", "配对 token")
-	fingerprint := fs.String("fingerprint", "", "证书 SHA-256 指纹")
+	token := fs.String("token", "", "配对 token（老办法；有 --code 就不用它）")
+	fingerprint := fs.String("fingerprint", "", "证书 SHA-256 指纹（老办法；有 --code 就不用它）")
+	code := fs.String("code", "", "6 位配对码，来自 Agent 上的 winforge pair-code")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -247,21 +292,34 @@ func runPair(args []string) error {
 		name = fs.Arg(0)
 	}
 	unexpectedArgs := (nameBeforeFlags && fs.NArg() != 0) || (!nameBeforeFlags && fs.NArg() != 1)
+	byCode := *code != ""
 	if name == "" || unexpectedArgs || (*host == "" && *instance == "") ||
-		*token == "" || *fingerprint == "" {
-		return fmt.Errorf("用法: winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256")
+		(!byCode && (*token == "" || *fingerprint == "")) {
+		return fmt.Errorf("用法: winforge pair NAME (--host URL | --instance MDNS_NAME) --code 123456\n" +
+			"   或: winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256")
+	}
+	if byCode && (*token != "" || *fingerprint != "") {
+		return fmt.Errorf("--code 和 --token/--fingerprint 是两种配对方式，不要混用")
 	}
 	profile := client.Profile{Host: *host, Token: *token, Fingerprint: *fingerprint, Instance: *instance}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if profile.Host == "" {
-		// 指纹永远来自带外的 init 输出；发现只负责找地址。
+		// 用配对码时还没有指纹，此时的解析只为找地址；地址找错了后面 proof 也过不了。
 		resolved, err := client.Relocate(ctx, profile, 4*time.Second)
 		if err != nil {
 			return err
 		}
 		profile = resolved
 		fmt.Printf("已通过 mDNS 找到 %s\n", profile.Host)
+	}
+	if byCode {
+		paired, err := client.PairWithCode(ctx, profile.Host, *code)
+		if err != nil {
+			return err
+		}
+		paired.Instance = profile.Instance
+		profile = paired
 	}
 	c, err := client.New(profile)
 	if err != nil {
