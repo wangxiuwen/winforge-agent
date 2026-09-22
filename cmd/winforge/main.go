@@ -30,7 +30,15 @@ func main() {
 		}
 		return
 	}
+	// 不带子命令 = 有人双击了它（或右键以管理员身份运行）。
+	// Windows 上这时候跑一键安装，而不是甩一页 usage 让人自己拼命令。
 	if len(os.Args) < 2 {
+		if handled, err := runSetup(); handled {
+			if err != nil {
+				os.Exit(1)
+			}
+			return
+		}
 		usage()
 		os.Exit(2)
 	}
