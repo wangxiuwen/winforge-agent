@@ -20,12 +20,17 @@ import (
 	"time"
 
 	"github.com/wangxiuwen/winforge-agent/internal/config"
+	"github.com/wangxiuwen/winforge-agent/internal/security"
 )
 
 type Server struct {
 	cfg       config.Config
 	workspace *Workspace
 	logger    *log.Logger
+
+	// 配对码状态。放在 Server 上而不是全局：一个进程可能跑多个实例（测试就是）。
+	pending     PendingPair
+	fingerprint string
 }
 
 type ExecRequest struct {
@@ -51,7 +56,13 @@ func New(cfg config.Config, logger *log.Logger) (*Server, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Server{cfg: cfg, workspace: workspace, logger: logger}, nil
+	fingerprint, err := security.CertificateFingerprint(cfg.CertFile)
+	if err != nil {
+		// 指纹只用于配对时给客户端验证；证书读不到就让配对明确失败，
+		// 而不是发一个空 proof 让客户端以为验过了。
+		logger.Printf("警告: 读取证书指纹失败，配对接口将不可用: %v", err)
+	}
+	return &Server{cfg: cfg, workspace: workspace, logger: logger, fingerprint: fingerprint}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -61,7 +72,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/upload", s.handleUpload)
 	mux.HandleFunc("GET /v1/download", s.handleDownload)
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)
-	return s.logRequests(s.authenticate(mux))
+	mux.HandleFunc("POST /v1/pair-code", s.handleArmPair)
+
+	// /v1/pair 不走 token 校验——它就是用来换 token 的。防线在 PendingPair：
+	// 短时效 + 一次性 + 错几次作废。
+	outer := http.NewServeMux()
+	outer.HandleFunc("POST /v1/pair", s.handlePair)
+	outer.Handle("/", s.authenticate(mux))
+	return s.logRequests(outer)
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -157,6 +175,18 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// 超时/客户端断开的那一刻就收掉**整棵进程树**，不能等到 cmd.Wait()
+	// 之后再收 —— 那时候根本走不到。
+	//
+	// exec.CommandContext 只杀直接子进程，孙子进程还活着，而它继承了同
+	// 一份 stdout/stderr 管道；管道不 EOF，下面 scanOutput 就不返回，
+	// `for event := range events` 永远不结束，整个 handler 卡死在那儿，
+	// Wait() 后面那句 terminateProcessTree 是一行死代码。
+	//
+	// 现场表现：一条 powershell -File build.ps1，只要脚本里起了后台进程，
+	// 这次 exec 就再也不返回，连接一直挂着，超时形同虚设。
+	stopTree := context.AfterFunc(ctx, func() { terminateProcessTree(cmd) })
+	defer stopTree()
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	flusher, _ := w.(http.Flusher)
@@ -178,7 +208,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	err = cmd.Wait()
 	if ctx.Err() != nil {
-		terminateProcessTree(cmd)
+		// 进程树已经由上面的 AfterFunc 收掉了，这里只负责把结论发出去。
 		_ = enc.Encode(ExecEvent{Stream: "exit", ExitCode: -1, Error: ctx.Err().Error()})
 		return
 	}

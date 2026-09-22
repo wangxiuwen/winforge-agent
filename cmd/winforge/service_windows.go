@@ -52,6 +52,9 @@ func runService(args []string) error {
 		return runSC("create", serviceName, "binPath=", binPath, "start=", "auto", "obj=", `NT AUTHORITY\LocalService`, "DisplayName=", "WinForge Agent")
 	case "uninstall":
 		_ = runSC("stop", serviceName)
+		// 规则是安装时加的，卸载就得收回去，别在机器上留一个指向不存在
+		// 服务的放行口。
+		removeFirewall()
 		return runSC("delete", serviceName)
 	case "start", "stop":
 		return runSC(action, serviceName)
