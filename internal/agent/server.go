@@ -175,6 +175,18 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// 超时/客户端断开的那一刻就收掉**整棵进程树**，不能等到 cmd.Wait()
+	// 之后再收 —— 那时候根本走不到。
+	//
+	// exec.CommandContext 只杀直接子进程，孙子进程还活着，而它继承了同
+	// 一份 stdout/stderr 管道；管道不 EOF，下面 scanOutput 就不返回，
+	// `for event := range events` 永远不结束，整个 handler 卡死在那儿，
+	// Wait() 后面那句 terminateProcessTree 是一行死代码。
+	//
+	// 现场表现：一条 powershell -File build.ps1，只要脚本里起了后台进程，
+	// 这次 exec 就再也不返回，连接一直挂着，超时形同虚设。
+	stopTree := context.AfterFunc(ctx, func() { terminateProcessTree(cmd) })
+	defer stopTree()
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	flusher, _ := w.(http.Flusher)
@@ -196,7 +208,7 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 	err = cmd.Wait()
 	if ctx.Err() != nil {
-		terminateProcessTree(cmd)
+		// 进程树已经由上面的 AfterFunc 收掉了，这里只负责把结论发出去。
 		_ = enc.Encode(ExecEvent{Stream: "exit", ExitCode: -1, Error: ctx.Err().Error()})
 		return
 	}
