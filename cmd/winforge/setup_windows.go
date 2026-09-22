@@ -86,6 +86,7 @@ func setupSteps() error {
 	if err := waitForPort(listenPort(cfg.Listen), 20*time.Second); err != nil {
 		return fmt.Errorf("服务起来了但端口没监听: %w", err)
 	}
+	openFirewall(listenPort(cfg.Listen))
 
 	// 4/4 配对码
 	fmt.Println("[4/4] 生成配对码")
@@ -125,6 +126,35 @@ func grantWorkspaceAccess(root string) {
 	if out, err := exec.Command("icacls.exe", root, "/grant", `NT AUTHORITY\LocalService:(OI)(CI)F`, "/T", "/C").CombinedOutput(); err != nil {
 		fmt.Printf("      提示: 给 workspace 授权失败，上传可能会 Access Denied: %v %s\n", err, strings.TrimSpace(string(out)))
 	}
+}
+
+// openFirewall 放行入站端口。
+//
+// Windows 防火墙默认挡掉新监听程序的入站连接，而且**连 ping 都不通**，
+// 所以对面看到的现象是"这台机器整个连不上"，很容易被当成网线/网段/VPN
+// 的问题去查。装完服务不开这个口子，等于没装。
+//
+// 幂等：同名规则已存在就不再加，否则每点一次安装就多一条重复规则。
+func openFirewall(port string) {
+	name := "WinForge Agent"
+	if out, err := exec.Command("netsh.exe", "advfirewall", "firewall", "show", "rule",
+		"name="+name).CombinedOutput(); err == nil && strings.Contains(string(out), name) {
+		fmt.Println("      防火墙规则已存在，跳过")
+		return
+	}
+	if out, err := exec.Command("netsh.exe", "advfirewall", "firewall", "add", "rule",
+		"name="+name, "dir=in", "action=allow", "protocol=TCP",
+		"localport="+port).CombinedOutput(); err != nil {
+		fmt.Printf("      提示: 防火墙放行失败，对面可能连不上 %s 端口: %v %s\n",
+			port, err, strings.TrimSpace(string(out)))
+		return
+	}
+	fmt.Printf("      已放行入站 TCP %s\n", port)
+}
+
+func removeFirewall() {
+	_ = exec.Command("netsh.exe", "advfirewall", "firewall", "delete", "rule",
+		"name=WinForge Agent").Run()
 }
 
 func waitForPort(port string, within time.Duration) error {

@@ -16,7 +16,17 @@ WinForge 是一个 Go 单二进制：同一程序在 Windows 上运行 Agent，�
 - 局域网 mDNS/DNS-SD 发现，构建机重启换 IP 后自动重新定位；
 - Windows/macOS/Linux amd64/arm64 构建。
 
-## Windows：初始化并启动
+## Windows：一步装好（推荐）
+
+把 `winforge.exe` 拷到机器上，**右键 →「以管理员身份运行」**。不带任何参数运行时
+它会自己走完：建配置 → 安装为 Windows 服务 → 启动 → 放行入站端口 → 打印一个
+6 位配对码和本机地址，然后停在那里等你回车。
+
+把那 6 位数字念给对面就行。全程幂等，装到一半失败再点一次能接着走完。
+
+卸载：`winforge.exe service uninstall`（连同防火墙规则一起收回）。
+
+## Windows：手工分步（需要自定义时）
 
 ```powershell
 winforge.exe init --config C:\ProgramData\WinForge\config.json `
