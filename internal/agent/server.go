@@ -19,6 +19,9 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
+
 	"github.com/wangxiuwen/winforge-agent/internal/config"
 	"github.com/wangxiuwen/winforge-agent/internal/security"
 )
@@ -213,8 +216,18 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 }
 
 func scanOutput(wg *sync.WaitGroup, reader io.Reader, stream string, events chan<- ExecEvent) {
+	scanOutputWith(wg, consoleOutputDecoder(), reader, stream, events)
+}
+
+func scanOutputWith(wg *sync.WaitGroup, decoder *encoding.Decoder, reader io.Reader, stream string, events chan<- ExecEvent) {
 	defer wg.Done()
-	scanner := bufio.NewScanner(reader)
+	src := io.Reader(reader)
+	if decoder != nil {
+		// 子进程管道输出按控制台/OEM 代码页转 UTF-8；无效字节由转换器
+		// 统一变单个 U+FFFD，而不是像逐字节解码那样放大成一串乱码。
+		src = transform.NewReader(reader, decoder)
+	}
+	scanner := bufio.NewScanner(src)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		events <- ExecEvent{Stream: stream, Data: scanner.Text()}

@@ -91,9 +91,11 @@ Mac/Linux:
   winforge pair NAME (--host URL | --instance MDNS_NAME) --token TOKEN --fingerprint SHA256   (老办法)
   winforge status --profile NAME
   winforge mkdir --profile NAME REMOTE_DIR
-  winforge upload --profile NAME LOCAL REMOTE
-  winforge download --profile NAME REMOTE LOCAL
-  winforge exec --profile NAME [--cwd DIR] [--timeout 30m] -- COMMAND [ARG...]`)
+  winforge upload --profile NAME LOCAL REMOTE       (REMOTE 为 workspace 内相对路径)
+  winforge download --profile NAME REMOTE LOCAL     (REMOTE 为 workspace 内相对路径)
+  winforge exec --profile NAME [--cwd DIR] [--timeout 30m] -- COMMAND [ARG...]
+    COMMAND 按 argv 逐参执行，不经过 shell；输出按 Windows 控制台代码页
+    自动转 UTF-8。复合命令请上传 .cmd/.ps1 后执行。`)
 }
 
 func runInit(args []string) error {
@@ -369,7 +371,7 @@ func runMkdir(args []string) error {
 func runUpload(args []string) error {
 	profileName, rest, err := parseProfile(args)
 	if err != nil || len(rest) != 2 {
-		return firstError(err, fmt.Errorf("用法: winforge upload --profile NAME LOCAL REMOTE"))
+		return firstError(err, fmt.Errorf("用法: winforge upload --profile NAME LOCAL REMOTE（REMOTE 为 workspace 内相对路径）"))
 	}
 	c, err := loadClient(profileName)
 	if err != nil {
@@ -383,7 +385,7 @@ func runUpload(args []string) error {
 func runDownload(args []string) error {
 	profileName, rest, err := parseProfile(args)
 	if err != nil || len(rest) != 2 {
-		return firstError(err, fmt.Errorf("用法: winforge download --profile NAME REMOTE LOCAL"))
+		return firstError(err, fmt.Errorf("用法: winforge download --profile NAME REMOTE LOCAL（REMOTE 为 workspace 内相对路径）"))
 	}
 	c, err := loadClient(profileName)
 	if err != nil {
@@ -404,7 +406,7 @@ func runExec(args []string) error {
 	}
 	command := fs.Args()
 	if *profileName == "" || len(command) == 0 {
-		return fmt.Errorf("用法: winforge exec --profile NAME [--cwd DIR] -- COMMAND [ARG...]")
+		return fmt.Errorf("用法: winforge exec --profile NAME [--cwd DIR] -- COMMAND [ARG...]（COMMAND 按 argv 执行，不经过 shell；复合命令请上传 .cmd/.ps1 后执行）")
 	}
 	c, err := loadClient(*profileName)
 	if err != nil {
