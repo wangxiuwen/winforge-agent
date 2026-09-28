@@ -31,6 +31,13 @@ type Server struct {
 	workspace *Workspace
 	logger    *log.Logger
 
+	// 交互终端：shellSlots 限并发会话数，shellIdle 是无输入回收时间。
+	// newShellSession 由平台文件提供（Windows = ConPTY + powershell，
+	// Unix = openpty + $SHELL），测试可换成假会话。
+	shellSlots      chan struct{}
+	shellIdle       time.Duration
+	newShellSession func(cols, rows uint16, cwd string) (shellSession, error)
+
 	// 配对码状态。放在 Server 上而不是全局：一个进程可能跑多个实例（测试就是）。
 	pending     PendingPair
 	fingerprint string
@@ -65,13 +72,19 @@ func New(cfg config.Config, logger *log.Logger) (*Server, error) {
 		// 而不是发一个空 proof 让客户端以为验过了。
 		logger.Printf("警告: 读取证书指纹失败，配对接口将不可用: %v", err)
 	}
-	return &Server{cfg: cfg, workspace: workspace, logger: logger, fingerprint: fingerprint}, nil
+	return &Server{
+		cfg: cfg, workspace: workspace, logger: logger, fingerprint: fingerprint,
+		shellSlots:      make(chan struct{}, maxShellSessions),
+		shellIdle:       defaultShellIdle,
+		newShellSession: startPTYSession,
+	}, nil
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/status", s.handleStatus)
 	mux.HandleFunc("POST /v1/exec", s.handleExec)
+	mux.HandleFunc("/v1/shell", s.handleShell) // WebSocket 握手是 GET
 	mux.HandleFunc("POST /v1/upload", s.handleUpload)
 	mux.HandleFunc("GET /v1/download", s.handleDownload)
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)

@@ -15,8 +15,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/coder/websocket"
 
 	"github.com/wangxiuwen/winforge-agent/internal/agent"
 )
@@ -176,6 +180,108 @@ func (c *Client) Exec(ctx context.Context, req agent.ExecRequest, stdout, stderr
 		return -1, fmt.Errorf("远端未返回退出码")
 	}
 	return exitCode, nil
+}
+
+// Shell 打开一条远端交互终端会话（WebSocket）：stdin 的键入以 Binary 帧
+// 上行（EOF 发 close 控制帧结束会话），终端输出以 Binary 帧写 stdout，
+// resize 通道接收窗口尺寸变化（可为 nil）。返回远端 shell 的退出码。
+func (c *Client) Shell(ctx context.Context, start agent.ShellStart, stdin io.Reader, stdout io.Writer, resize <-chan agent.TermSize) (int, error) {
+	q := url.Values{}
+	q.Set("cwd", start.Cwd)
+	q.Set("cols", strconv.Itoa(int(start.Cols)))
+	q.Set("rows", strconv.Itoa(int(start.Rows)))
+	wsURL := wsScheme(c.profile.Host) + "/v1/shell?" + q.Encode()
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPClient: c.http,
+		HTTPHeader: http.Header{"Authorization": {"Bearer " + c.profile.Token}},
+	})
+	if err != nil {
+		return -1, err
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	var sendMu sync.Mutex
+	sendText := func(v any) error {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+		sendMu.Lock()
+		defer sendMu.Unlock()
+		return conn.Write(ctx, websocket.MessageText, b)
+	}
+	if resize != nil {
+		go func() {
+			for size := range resize {
+				if sendText(map[string]any{"resize": size}) != nil {
+					return
+				}
+			}
+		}()
+	}
+	// 键入转发：stdin EOF = 用户要结束会话（Ctrl-D），发 close 控制帧，
+	// 服务端收尾后回 exit 事件。
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := stdin.Read(buf)
+			if n > 0 {
+				sendMu.Lock()
+				werr := conn.Write(ctx, websocket.MessageBinary, buf[:n])
+				sendMu.Unlock()
+				if werr != nil {
+					return
+				}
+			}
+			if err != nil {
+				_ = sendText(map[string]any{"close": true})
+				return
+			}
+		}
+	}()
+
+	exitCode := -1
+	for {
+		typ, data, err := conn.Read(ctx)
+		if err != nil {
+			break
+		}
+		switch typ {
+		case websocket.MessageBinary:
+			if _, werr := stdout.Write(data); werr != nil {
+				return exitCode, werr
+			}
+		case websocket.MessageText:
+			var event struct {
+				Exit *struct {
+					Code  int    `json:"code"`
+					Error string `json:"error"`
+				} `json:"exit"`
+			}
+			if json.Unmarshal(data, &event) == nil && event.Exit != nil {
+				exitCode = event.Exit.Code
+				if event.Exit.Error != "" {
+					return exitCode, fmt.Errorf("远端会话: %s", event.Exit.Error)
+				}
+			}
+		}
+	}
+	if exitCode < 0 {
+		return exitCode, fmt.Errorf("连接中断，远端会话已结束")
+	}
+	return exitCode, nil
+}
+
+// wsScheme 把 agent 的 https:// host 换成 wss://（http 同理换 ws）。
+func wsScheme(host string) string {
+	switch {
+	case strings.HasPrefix(host, "https://"):
+		return "wss://" + strings.TrimPrefix(host, "https://")
+	case strings.HasPrefix(host, "http://"):
+		return "ws://" + strings.TrimPrefix(host, "http://")
+	default:
+		return "wss://" + host
+	}
 }
 
 func expectOK(resp *http.Response) error {

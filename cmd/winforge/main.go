@@ -18,6 +18,7 @@ import (
 	"github.com/wangxiuwen/winforge-agent/internal/config"
 	"github.com/wangxiuwen/winforge-agent/internal/discovery"
 	"github.com/wangxiuwen/winforge-agent/internal/security"
+	"golang.org/x/term"
 )
 
 var version = "dev"
@@ -56,6 +57,8 @@ func main() {
 		err = runDownload(os.Args[2:])
 	case "exec":
 		err = runExec(os.Args[2:])
+	case "shell":
+		err = runShell(os.Args[2:])
 	case "rotate-token":
 		err = runRotateToken(os.Args[2:])
 	case "service":
@@ -95,7 +98,10 @@ Mac/Linux:
   winforge download --profile NAME REMOTE LOCAL     (REMOTE 为 workspace 内相对路径)
   winforge exec --profile NAME [--cwd DIR] [--timeout 30m] -- COMMAND [ARG...]
     COMMAND 按 argv 逐参执行，不经过 shell；输出按 Windows 控制台代码页
-    自动转 UTF-8。复合命令请上传 .cmd/.ps1 后执行。`)
+    自动转 UTF-8。复合命令请上传 .cmd/.ps1 后执行。
+  winforge shell --profile NAME [--cwd DIR]
+    打开远端交互终端（Windows = PowerShell/ConPTY，Unix = 登录 shell/PTY）。
+    需要 TTY；exit 或 Ctrl-D 结束，空闲超 10 分钟服务端回收会话。`)
 }
 
 func runInit(args []string) error {
@@ -422,6 +428,53 @@ func runExec(args []string) error {
 	}
 	if exitCode != 0 {
 		return fmt.Errorf("远端退出码: %d", exitCode)
+	}
+	return nil
+}
+
+// runShell 把本地终端接到远端会话：TTY 时进 raw 模式（按键直传、回显和
+// 行编辑交给远端），管道输入（自动化冒烟）则原样转发。
+func runShell(args []string) error {
+	fs := flag.NewFlagSet("shell", flag.ContinueOnError)
+	profileName := fs.String("profile", "", "profile 名称")
+	cwd := fs.String("cwd", ".", "远端工作目录（workspace 内相对路径）")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *profileName == "" {
+		return fmt.Errorf("用法: winforge shell --profile NAME [--cwd DIR]")
+	}
+	c, err := loadClient(*profileName)
+	if err != nil {
+		return err
+	}
+	fd := int(os.Stdin.Fd())
+	isTTY := term.IsTerminal(fd)
+	start := agent.ShellStart{Cwd: *cwd}
+	var oldState *term.State
+	if isTTY {
+		if w, h, err := term.GetSize(fd); err == nil {
+			start.Cols, start.Rows = uint16(w), uint16(h)
+		}
+		var err error
+		if oldState, err = term.MakeRaw(fd); err != nil {
+			return fmt.Errorf("进入终端 raw 模式: %w", err)
+		}
+		defer term.Restore(fd, oldState)
+	}
+	resizeCh := make(chan agent.TermSize, 1)
+	stopResize := watchTerminalResize(fd, resizeCh)
+	defer stopResize()
+
+	exitCode, err := c.Shell(context.Background(), start, os.Stdin, os.Stdout, resizeCh)
+	if isTTY {
+		fmt.Fprintln(os.Stderr) // raw 模式退出后补回车，别让提示符贴在旧输出上
+	}
+	if err != nil {
+		return err
+	}
+	if exitCode != 0 {
+		return fmt.Errorf("远端 shell 退出码: %d", exitCode)
 	}
 	return nil
 }
