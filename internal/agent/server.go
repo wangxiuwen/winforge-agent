@@ -19,13 +19,21 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/transform"
+
 	"github.com/wangxiuwen/winforge-agent/internal/config"
+	"github.com/wangxiuwen/winforge-agent/internal/security"
 )
 
 type Server struct {
 	cfg       config.Config
 	workspace *Workspace
 	logger    *log.Logger
+
+	// 配对码状态。放在 Server 上而不是全局：一个进程可能跑多个实例（测试就是）。
+	pending     PendingPair
+	fingerprint string
 }
 
 type ExecRequest struct {
@@ -51,7 +59,13 @@ func New(cfg config.Config, logger *log.Logger) (*Server, error) {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Server{cfg: cfg, workspace: workspace, logger: logger}, nil
+	fingerprint, err := security.CertificateFingerprint(cfg.CertFile)
+	if err != nil {
+		// 指纹只用于配对时给客户端验证；证书读不到就让配对明确失败，
+		// 而不是发一个空 proof 让客户端以为验过了。
+		logger.Printf("警告: 读取证书指纹失败，配对接口将不可用: %v", err)
+	}
+	return &Server{cfg: cfg, workspace: workspace, logger: logger, fingerprint: fingerprint}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -61,7 +75,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/upload", s.handleUpload)
 	mux.HandleFunc("GET /v1/download", s.handleDownload)
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)
-	return s.logRequests(s.authenticate(mux))
+	mux.HandleFunc("POST /v1/pair-code", s.handleArmPair)
+
+	// /v1/pair 不走 token 校验——它就是用来换 token 的。防线在 PendingPair：
+	// 短时效 + 一次性 + 错几次作废。
+	outer := http.NewServeMux()
+	outer.HandleFunc("POST /v1/pair", s.handlePair)
+	outer.Handle("/", s.authenticate(mux))
+	return s.logRequests(outer)
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -195,8 +216,18 @@ func (s *Server) handleExec(w http.ResponseWriter, r *http.Request) {
 }
 
 func scanOutput(wg *sync.WaitGroup, reader io.Reader, stream string, events chan<- ExecEvent) {
+	scanOutputWith(wg, consoleOutputDecoder(), reader, stream, events)
+}
+
+func scanOutputWith(wg *sync.WaitGroup, decoder *encoding.Decoder, reader io.Reader, stream string, events chan<- ExecEvent) {
 	defer wg.Done()
-	scanner := bufio.NewScanner(reader)
+	src := io.Reader(reader)
+	if decoder != nil {
+		// 子进程管道输出按控制台/OEM 代码页转 UTF-8；无效字节由转换器
+		// 统一变单个 U+FFFD，而不是像逐字节解码那样放大成一串乱码。
+		src = transform.NewReader(reader, decoder)
+	}
+	scanner := bufio.NewScanner(src)
 	scanner.Buffer(make([]byte, 64<<10), 1<<20)
 	for scanner.Scan() {
 		events <- ExecEvent{Stream: stream, Data: scanner.Text()}

@@ -25,7 +25,17 @@ winforge.exe init --config C:\ProgramData\WinForge\config.json `
 winforge.exe serve --config C:\ProgramData\WinForge\config.json
 ```
 
-`init` 会打印一次配对命令。请通过可信通道复制到 Mac，不要把 token 写进聊天、工单或 Git。
+配对用 6 位数字，不用搬运长字符串：服务起来后在 Windows 上执行
+
+```powershell
+winforge.exe pair-code --config C:\ProgramData\WinForge\config.json
+```
+
+它会打印一个 **6 位配对码**（10 分钟内有效、只能用一次、错 5 次作废）。把这 6 个数字
+念给对面就行——真正的 token 和证书指纹由两端在配对时自动交换和校验，不需要人经手。
+
+`init` 也会打印长 token 和指纹，那是不方便用 `pair-code` 时的后备方案；一旦打印出来，
+就请通过可信通道传递，不要写进聊天、工单或 Git。
 
 安装为服务（在管理员终端执行）：
 
@@ -40,8 +50,7 @@ winforge discover                     # 列出局域网内的 Agent
 
 winforge pair windows-lab \
   --instance '<discover 里的实例名>' \
-  --token '<Windows init 输出>' \
-  --fingerprint '<Windows init 输出>'
+  --code 123456                       # Windows 上 winforge pair-code 打印的 6 位数字
 
 winforge status --profile windows-lab
 winforge mkdir --profile windows-lab firmware
@@ -52,6 +61,21 @@ winforge download --profile windows-lab firmware/out/app.bin ./app.bin
 
 固定 IP 也可以：把 `--instance` 换成 `--host https://192.0.2.50:9443`。两个一起给，
 则平时走固定地址，连不上时才回退到发现。
+
+不方便用配对码时（比如两端不在同一个局域网），仍可搬运长凭证：
+`--token '<init 输出>' --fingerprint '<init 输出>'`，与 `--code` 二选一。
+
+### 6 位数字为什么够安全
+
+配对码只是"人来传递"的那一段，长期凭证仍是 32 字节随机 token，只是不再经人手。
+6 位数字本身只有一百万种，所以它同时受三道限制：**10 分钟过期、只能用一次、错 5 次作废**，
+在线爆破没有机会。
+
+它还顺手解决了指纹的问题。以前要人把 64 个十六进制字符抄到另一台机器上核对——
+抄错了会失败，不抄照样"能用"，于是实际上没人真的核对，防中间人就是一句空话。
+现在服务端用配对码作密钥、对自己的证书指纹做 HMAC 返回，客户端拿**握手时实际看到的**
+指纹算一遍比对：中间人不知道那 6 位数字，就伪造不出这个证明，配对会直接中止。
+人少记一样东西，安全性反而更高。
 
 ## 局域网发现
 

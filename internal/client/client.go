@@ -47,7 +47,12 @@ func New(profile Profile) (*Client, error) {
 	}
 	return &Client{
 		profile: profile,
-		http:    &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}},
+		// ProxyFromEnvironment 支持 HTTPS_PROXY 走本地转发(如 macOS 本地网络
+		// 权限拦截时经豁免工具出站),隧道不影响上层证书指纹校验。
+		http: &http.Client{Transport: &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: tlsConfig,
+		}},
 	}, nil
 }
 
