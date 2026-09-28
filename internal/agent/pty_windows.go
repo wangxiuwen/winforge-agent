@@ -3,214 +3,150 @@
 package agent
 
 import (
+	"bufio"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
-	"syscall"
-	"unicode/utf16"
-	"unsafe"
 )
-
-// ConPTY（Windows 伪控制台）绑定，只取交互终端用到的最小面。
-// 参考 cardinality: CreatePseudoConsole/Resize/Close + 挂
-// PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE 的 CreateProcessW。
-var (
-	procCreatePseudoConsole       = kernel32.NewProc("CreatePseudoConsole")
-	procResizePseudoConsole       = kernel32.NewProc("ResizePseudoConsole")
-	procClosePseudoConsole        = kernel32.NewProc("ClosePseudoConsole")
-	procInitProcThreadAttrList    = kernel32.NewProc("InitializeProcThreadAttributeList")
-	procUpdateProcThreadAttribute = kernel32.NewProc("UpdateProcThreadAttribute")
-	procDeleteProcThreadAttrList  = kernel32.NewProc("DeleteProcThreadAttributeList")
-	procCreateProcessW            = kernel32.NewProc("CreateProcessW")
-)
-
-const (
-	procThreadAttributePseudoConsole = 0x00020016
-	extendedStartupInfoPresent       = 0x00080000
-	createUnicodeEnvironment         = 0x00000400
-)
-
-type processInformation struct {
-	Process   syscall.Handle
-	Thread    syscall.Handle
-	ProcessID uint32
-	ThreadID  uint32
-}
-
-type startupInfoExW struct {
-	syscall.StartupInfo
-	AttributeList *byte
-}
 
 func shellName() string { return "powershell.exe" }
 
-// startPTYSession 起一条 ConPTY 会话。shell 经 `cmd /c chcp 65001 & powershell`
-// 启动：ConPTY 新控制台的输出代码页默认是 OEM（中文系统 936），先切 65001
-// 再进 PowerShell，终端流才是 UTF-8。
+// startPTYSession 经 conpty-bridge 子命令起远端会话。ConPTY 的 conhost 继承
+// 创建者的 std 形态，服务进程的 std 是空/文件时伪控制台静默失效——所以
+// ConPTY 必须在被 exec 拉起（管道 std）的 bridge 进程里创建，本端只做
+// stdio 帧桥，协议见 cmd/winforge/conpty_bridge_windows.go。
 func startPTYSession(cols, rows uint16, cwd string) (shellSession, error) {
-	inR, inW, err := os.Pipe()
+	self, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	outR, outW, err := os.Pipe()
+	cmd := exec.Command(self, "conpty-bridge",
+		"--cols", fmt.Sprint(cols),
+		"--rows", fmt.Sprint(rows),
+		"--cwd", cwd,
+		"--shell", shellCmdline(),
+	)
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		inR.Close()
-		inW.Close()
 		return nil, err
 	}
-	s := &conptySession{inW: inW, outR: outR}
-
-	var hpc uintptr
-	hr, _, callErr := procCreatePseudoConsole.Call(
-		uintptr(cols)|uintptr(rows)<<16,
-		inR.Fd(), outW.Fd(), 0, uintptr(unsafe.Pointer(&hpc)))
-	if hr != 0 {
-		s.inW.Close()
-		s.outR.Close()
-		return nil, fmt.Errorf("CreatePseudoConsole: %v", callErr)
-	}
-	s.hpc = hpc
-
-	// 伪控制台的尺寸已随创建给出；管道句柄已被 ConPTY 复制，父端用完即关。
-	inR.Close()
-	outW.Close()
-
-	attr, err := s.spawnShell(cwd)
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		s.Close()
 		return nil, err
 	}
-	s.attr = attr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	configureProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("启动 conpty-bridge: %w", err)
+	}
+
+	s := &bridgeSession{cmd: cmd, stdin: stdin, stdout: stdout, stderr: bufio.NewReader(stderr), exitCh: make(chan int, 1)}
+	// 等 started 事件（启动失败也在这里以 error 事件或进程退出表现）。
+	line, err := s.stderr.ReadString('\n')
+	var event struct {
+		Event string `json:"event"`
+		Code  int    `json:"code"`
+		Msg   string `json:"msg"`
+	}
+	if err == nil {
+		_ = json.Unmarshal([]byte(line), &event)
+	}
+	if event.Event == "error" || (err != nil && event.Event == "") {
+		terminateProcessTree(cmd)
+		msg := event.Msg
+		if msg == "" {
+			msg = "bridge 提前退出"
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
 	return s, nil
 }
 
-func (s *conptySession) spawnShell(cwd string) (*byte, error) {
-	// InitializeProcThreadAttributeList 是 BOOL 语义 API：失败返回 0，
-	// 第一次故意传 nil 让它填出所需的 attribute list 大小。
-	var attrSize uintptr
-	procInitProcThreadAttrList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
-	if attrSize == 0 {
-		return nil, fmt.Errorf("InitializeProcThreadAttributeList: 无法取得 attribute list 大小")
-	}
-	attr := make([]byte, attrSize)
-	hr, _, callErr := procInitProcThreadAttrList.Call(
-		uintptr(unsafe.Pointer(&attr[0])), 1, 0, uintptr(unsafe.Pointer(&attrSize)))
-	if hr == 0 {
-		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %v", callErr)
-	}
-	hr, _, callErr = procUpdateProcThreadAttribute.Call(
-		uintptr(unsafe.Pointer(&attr[0])), 0, procThreadAttributePseudoConsole,
-		s.hpc, unsafe.Sizeof(s.hpc), 0, 0)
-	if hr == 0 {
-		procDeleteProcThreadAttrList.Call(uintptr(unsafe.Pointer(&attr[0])))
-		return nil, fmt.Errorf("UpdateProcThreadAttribute: %v", callErr)
-	}
-
-	cmdline, err := syscall.UTF16PtrFromString(`cmd.exe /c "chcp 65001 >nul & powershell.exe -NoLogo"`)
-	if err != nil {
-		procDeleteProcThreadAttrList.Call(uintptr(unsafe.Pointer(&attr[0])))
-		return nil, err
-	}
-	cwdPtr, err := syscall.UTF16PtrFromString(cwd)
-	if err != nil {
-		procDeleteProcThreadAttrList.Call(uintptr(unsafe.Pointer(&attr[0])))
-		return nil, err
-	}
-	var si startupInfoExW
-	si.Cb = uint32(unsafe.Sizeof(si))
-	var pi processInformation
-	// 伪控制台场景 bInheritHandles 必须为 FALSE：管道由 ConPTY 侧持有，
-	// 让子进程继承反而把没有伪控制台的句柄也漏过去。
-	hr, _, callErr = procCreateProcessW.Call(
-		0, uintptr(unsafe.Pointer(cmdline)), 0, 0, 0,
-		extendedStartupInfoPresent|createUnicodeEnvironment,
-		envBlock(), uintptr(unsafe.Pointer(cwdPtr)),
-		uintptr(unsafe.Pointer(&si)), uintptr(unsafe.Pointer(&pi)))
-	if hr == 0 {
-		procDeleteProcThreadAttrList.Call(uintptr(unsafe.Pointer(&attr[0])))
-		return nil, fmt.Errorf("CreateProcessW: %v", callErr)
-	}
-	syscall.CloseHandle(pi.Thread)
-	proc, err := os.FindProcess(int(pi.ProcessID))
-	if err != nil {
-		return nil, err
-	}
-	s.proc = proc
-	return &attr[0], nil
+// shellCmdline：裸 powershell 直启。cmd /c "chcp 65001 & ..." 的套壳在
+// ConPTY 下实测表现为 powershell 起来即退（退出码 1、零输出），UTF-8 输出
+// 改由会话建立后注入一条 [Console]::OutputEncoding 设置命令解决。
+func shellCmdline() string {
+	return `powershell.exe -NoLogo`
 }
 
-// envBlock 构造 UTF-16 环境块（继承父进程 + 终端会话需要的 TERM）。
-func envBlock() uintptr {
-	lines := os.Environ()
-	haveTerm := false
-	for _, line := range lines {
-		if strings.HasPrefix(strings.ToUpper(line), "TERM=") {
-			haveTerm = true
-			break
-		}
-	}
-	if !haveTerm {
-		lines = append(lines, "TERM=xterm-256color")
-	}
-	var b strings.Builder
-	for _, line := range lines {
-		b.WriteString(line)
-		b.WriteByte(0)
-	}
-	b.WriteByte(0)
-	u16 := utf16.Encode([]rune(b.String()))
-	return uintptr(unsafe.Pointer(&u16[0]))
-}
-
-type conptySession struct {
-	hpc    uintptr
-	attr   *byte
-	inW    *os.File
-	outR   *os.File
-	proc   *os.Process
+type bridgeSession struct {
+	cmd       *exec.Cmd
+	stdin     io.WriteCloser
+	stdout    io.ReadCloser
+	stderr    *bufio.Reader
+	exitCh    chan int
+	writeOnce sync.Once
 	closeOnce sync.Once
 }
 
-func (s *conptySession) Read(p []byte) (int, error)  { return s.outR.Read(p) }
-func (s *conptySession) Write(p []byte) (int, error) { return s.inW.Write(p) }
+func (s *bridgeSession) Read(p []byte) (int, error) { return s.stdout.Read(p) }
 
-func (s *conptySession) Resize(cols, rows uint16) error {
-	hr, _, callErr := procResizePseudoConsole.Call(s.hpc, uintptr(cols)|uintptr(rows)<<16)
-	if hr != 0 {
-		return fmt.Errorf("ResizePseudoConsole: %v", callErr)
-	}
-	return nil
+func (s *bridgeSession) Write(b []byte) (int, error) {
+	return s.writeFrame(0x01, b)
 }
 
-func (s *conptySession) Wait() (int, error) {
-	if s.proc == nil {
-		return -1, fmt.Errorf("shell 进程未启动")
-	}
-	state, err := s.proc.Wait()
-	if err != nil {
-		return -1, err
-	}
-	if ws, ok := state.Sys().(syscall.WaitStatus); ok {
-		return int(ws.ExitCode), nil
-	}
-	return state.ExitCode(), nil
+func (s *bridgeSession) Resize(cols, rows uint16) error {
+	frame := make([]byte, 0, 5)
+	frame = append(frame, 0x02)
+	frame = binary.LittleEndian.AppendUint16(frame, cols)
+	frame = binary.LittleEndian.AppendUint16(frame, rows)
+	_, err := s.stdin.Write(frame)
+	return err
 }
 
-// Close 关闭伪控制台（conhost 断开后 shell 通常自行退出），仍活着就整树
-// 强杀，最后释放 attribute list 与管道。
-func (s *conptySession) Close() error {
+func (s *bridgeSession) writeFrame(kind byte, b []byte) (int, error) {
+	frame := make([]byte, 0, len(b)+3)
+	frame = append(frame, kind)
+	frame = binary.LittleEndian.AppendUint16(frame, uint16(len(b)))
+	frame = append(frame, b...)
+	_, err := s.stdin.Write(frame)
+	return len(b), err
+}
+
+func (s *bridgeSession) Wait() (int, error) {
+	// exit 事件在 stderr 上；bridge 退出也视为会话结束。
+	type result struct {
+		code int
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		for {
+			line, err := s.stderr.ReadString('\n')
+			if err != nil {
+				done <- result{code: -1}
+				return
+			}
+			var event struct {
+				Event string `json:"event"`
+				Code  int    `json:"code"`
+			}
+			if json.Unmarshal([]byte(line), &event) == nil && event.Event == "exit" {
+				done <- result{code: event.Code}
+				return
+			}
+		}
+	}()
+	go func() {
+		_ = s.cmd.Wait()
+	}()
+	select {
+	case r := <-done:
+		return r.code, r.err
+	}
+}
+
+func (s *bridgeSession) Close() error {
 	s.closeOnce.Do(func() {
-		procClosePseudoConsole.Call(s.hpc)
-		if s.proc != nil {
-			_ = exec.Command("taskkill.exe", "/PID", fmt.Sprint(s.proc.Pid), "/T", "/F").Run()
-		}
-		if s.attr != nil {
-			procDeleteProcThreadAttrList.Call(uintptr(unsafe.Pointer(s.attr)))
-		}
-		s.inW.Close()
-		s.outR.Close()
+		s.stdin.Close() // 关输入，bridge 收尾
+		terminateProcessTree(s.cmd)
 	})
 	return nil
 }

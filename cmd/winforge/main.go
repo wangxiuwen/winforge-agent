@@ -59,6 +59,8 @@ func main() {
 		err = runExec(os.Args[2:])
 	case "shell":
 		err = runShell(os.Args[2:])
+	case "conpty-bridge":
+		err = runConptyBridge(os.Args[2:])
 	case "rotate-token":
 		err = runRotateToken(os.Args[2:])
 	case "service":
