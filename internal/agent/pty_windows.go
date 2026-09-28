@@ -87,13 +87,15 @@ func startPTYSession(cols, rows uint16, cwd string) (shellSession, error) {
 }
 
 func (s *conptySession) spawnShell(cwd string) (*byte, error) {
+	// InitializeProcThreadAttributeList 是 BOOL 语义 API：失败返回 0，
+	// 第一次故意传 nil 让它填出所需的 attribute list 大小。
 	var attrSize uintptr
-	hr, _, callErr := procInitProcThreadAttrList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
-	if hr == 0 {
-		return nil, fmt.Errorf("InitializeProcThreadAttributeList(size): %v", callErr)
+	procInitProcThreadAttrList.Call(0, 1, 0, uintptr(unsafe.Pointer(&attrSize)))
+	if attrSize == 0 {
+		return nil, fmt.Errorf("InitializeProcThreadAttributeList: 无法取得 attribute list 大小")
 	}
 	attr := make([]byte, attrSize)
-	hr, _, callErr = procInitProcThreadAttrList.Call(
+	hr, _, callErr := procInitProcThreadAttrList.Call(
 		uintptr(unsafe.Pointer(&attr[0])), 1, 0, uintptr(unsafe.Pointer(&attrSize)))
 	if hr == 0 {
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList: %v", callErr)
