@@ -39,6 +39,10 @@
 
 ## 轮次记录
 
+### R20（2026-10-27）
+- 稳态巡检：build/vet/race 全绿、冒烟通过、工作树干净（dist 已被 gitignore，
+  无杂物文件）。无代码变更。
+
 ### R19（2026-10-27）
 - 例行健康巡检：make release 重演练（R10 后核心大改过——8 产物全出含
   winforgedesk windowsgui×2）；-race 全量绿（desk+deskapp）；冒烟通过。
