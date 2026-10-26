@@ -39,6 +39,13 @@
 
 ## 轮次记录
 
+### R31（2026-10-27）
+- 控制台 HTTP 安全头：securityHeaders 中间件统一加 X-Content-Type-Options:
+  nosniff 与 Referrer-Policy: no-referrer（首次写法误用 ServeMux.Use——标准库
+  mux 无该方法，改为包裹整个 mux）。
+- 协议边界测试：session_test 补超大长度前缀拒绝/超限写拒绝/边界帧读取三例
+  （防内存放大）。-race 全量绿 + 冒烟通过。
+
 ### R30（2026-10-27）
 - 稳态巡检：build/race 全绿、冒烟 10.6s 全过（重连收敛在窗口内，
   R25 的 90s 等待是防御性的，实际 <5s）；工作树干净。无代码变更。

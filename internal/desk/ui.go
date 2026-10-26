@@ -101,7 +101,7 @@ func StartBrowserUI(h *Hub, port int) (string, error) {
 	s.mux.HandleFunc("/api/events", s.auth(s.handleEvents))
 	s.mux.HandleFunc("/api/upload", s.auth(s.handleUpload))
 
-	srv := &http.Server{Handler: s.mux}
+	srv := &http.Server{Handler: securityHeaders(s.mux)}
 	go func() { _ = srv.Serve(ln) }()
 	return s.addr, nil
 }
@@ -137,10 +137,21 @@ func (s *uiServer) handleStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
 	if ct := mime.TypeByExtension(filepath.Ext(name)); ct != "" {
 		w.Header().Set("Content-Type", ct)
 	}
 	_, _ = io.Copy(w, f)
+}
+
+// securityHeaders 给所有响应加控制台安全头（nosniff/no-referrer）。
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // uiCommand 是 /api/rpc 的请求。
