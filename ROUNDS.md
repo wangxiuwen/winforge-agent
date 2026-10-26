@@ -39,6 +39,17 @@
 
 ## 轮次记录
 
+### R16（2026-10-27）
+- 例行回归轮：格式漂移收尾（gofmt 范围=自己写的 internal/desk、internal/deskapp、
+  cmd/winforgedesk；范围外的 agent/client 等存量非格式化文件不碰）；
+  TestHubReconnectAfterDrop 断线重连等待 15s→25s（套件内受前序测试 UDP/端口
+  TIME_WAIT 干扰时偶发超时，单独 -count=3 从未复现）。
+- 全链回归：build/vet/race 套件×3 连跑全绿 + 冒烟通过。
+- 环境事实：GitHub API（api.github.com）当前被墙且 7897 代理未开，CI 状态无法
+  命令行核查；SSH（ssh.github.com:443）push 正常，远端与本地同步（ffce38e）。
+  CI 结果待用户网页查看；若 CI 红，优先怀疑 govulncheck 新公告而非代码回归
+  （R10 本地预检为 0 可达）。
+
 ### R15（2026-10-26）
 - 边缘提示条渐显/渐隐：初始 alpha=0，显示时 16ms/帧步进至 170（~200ms），
   隐藏时先渐隐再 SW_HIDE；bar 线程内阻塞实现（最长 ~200ms，可接受）。

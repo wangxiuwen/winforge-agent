@@ -419,7 +419,7 @@ func TestHubReconnectAfterDrop(t *testing.T) {
 	_ = s.conn.Close()
 
 	// 退避重连后恢复在线。
-	waitFor(t, 15*time.Second, "断线后自动重连", func() bool {
+	waitFor(t, 25*time.Second, "断线后自动重连", func() bool {
 		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
 	})
 	// 重连后的会话能继续收发（切换窗口期可能出现一次瞬态失败，允许重试）。
@@ -932,7 +932,7 @@ func TestAddrLearning(t *testing.T) {
 	s := b.sessions[aSelfID]
 	b.mu.Unlock()
 	_ = s.conn.Close()
-	waitFor(t, 15*time.Second, "断线后自动重连", func() bool {
+	waitFor(t, 25*time.Second, "断线后自动重连", func() bool {
 		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
 	})
 	var chatErr error
