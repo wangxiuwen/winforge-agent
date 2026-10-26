@@ -149,7 +149,7 @@ func LoadConfig(path string) (*Config, error) {
 
 // SaveConfig 原子写回配置。
 func SaveConfig(path string, cfg *Config) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(cfg, "", "  ")

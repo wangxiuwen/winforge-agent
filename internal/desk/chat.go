@@ -52,7 +52,7 @@ func (h *Hub) saveChatFile(peerID string, list []ChatMsg) {
 	if !ok {
 		return
 	}
-	if err := os.MkdirAll(h.chatDir(), 0o755); err != nil {
+	if err := os.MkdirAll(h.chatDir(), 0o700); err != nil {
 		return
 	}
 	b, err := json.Marshal(list)

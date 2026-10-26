@@ -78,7 +78,7 @@ func OpenRotatingLog() (io.Writer, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "winforge"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "winforge"), 0o700); err != nil {
 		return nil, nil, err
 	}
 	w, err := newRotateWriter(filepath.Join(dir, "winforge", "desk.log"), logMaxBytes)
