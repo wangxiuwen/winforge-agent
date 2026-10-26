@@ -39,6 +39,26 @@
 
 ## 轮次记录
 
+### R40（2026-10-27）
+- 998d08e 的 CI failure 复盘：HEAD d0967ac（Go 代码完全相同，只差 web 静态文件）
+  CI 全绿 success，本地 -race count=3 连跑 45s 无 FAIL 无 DATA RACE → 定性为
+  CI 侧一次性抖动，非代码问题。当时日志没落 ci-log（HEAD 仍是 b1b5d558 的旧日志），
+  注解只有"TEST-FAILED exit=1"，KEY grep（FAIL|panic|DATA RACE…）零命中、
+  TAIL 停在配对输出中间——是"无 FAIL 行的中途退出"类失败，诊断通道没接住。
+- ci.yml 诊断增强：KEY grep 加宽（+fatal error|timed out|shutdown signal|exit status）、
+  TAIL 25→60 行、TEST-FAILED 带日志总行数、发布失败时吐响应体前 400 字节
+  （PUBLISH-BODY）——下次"谜之失败"可完整自诊断。
+- 教训：ci-log 机制自 b1b5d558 以来没被真实失败演练过（那次之后 CI 一直绿），
+  第一次真失败就暴露了覆盖面缺口；诊断通道本身也要随失败模式演进。
+
+### R39（2026-10-27）
+- 补入库：微信风格三栏 UI（app.js/index.html/style.css，-471/+583）实际一直
+  只在工作区、从未提交——R38 续记录的"已随 R38 前段提交"有误（当时只部署了
+  /d/tools/bin，忘了 commit）。本轮走完门禁（build/vet/-race/冒烟 6 段全绿）
+  后正式入库为 d0967ac，CI 全绿。
+- ★教训：每轮规则第 1 条"git status 确认干净"不只防吸收别人改动，也防
+  自己上一轮"以为提交了其实没有"；push 前后各看一次 git status。
+
 ### R38 续（2026-10-27）
 - 残留 race 清零：connectMissing 的 h.cfg.Peers 直接遍历换 PeersSnapshot()
   （R28 漏改点，-race 实测抓到）。count=2 连跑 0 race。

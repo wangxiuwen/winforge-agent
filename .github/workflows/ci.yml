@@ -21,10 +21,10 @@ jobs:
       - name: Test
         run: |
           go test -race ./... > test.log 2>&1 || {
-            echo "::error::TEST-FAILED exit=$?"
+            echo "::error::TEST-FAILED exit=$? lines=$(grep -c '' test.log)"
             sed -n '1,25p' test.log | sed 's/^/::error::HEAD /'
-            grep -E 'FAIL|panic|DATA RACE|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -30
-            tail -25 test.log | sed 's/^/::error::TAIL /'
+            grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -30
+            tail -60 test.log | sed 's/^/::error::TAIL /'
             exit 1
           }
       - name: Publish test log
@@ -37,6 +37,7 @@ jobs:
           if [ -n "$SHA" ]; then PAYLOAD="{\"message\":\"update\",\"content\":\"$B64\",\"branch\":\"ci-log\",\"sha\":\"$SHA\"}"; fi
           HTTP=$(curl -s -o /tmp/put.json -w "%{http_code}" -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD")
           echo "::error::PUBLISH-HTTP $HTTP"
+          if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then head -c 400 /tmp/put.json | sed 's/^/::error::PUBLISH-BODY /'; fi
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
