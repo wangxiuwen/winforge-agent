@@ -39,6 +39,18 @@
 
 ## 轮次记录
 
+### R35（2026-10-27）
+- 用户反馈"本地托盘没看到"+"一直弹编译错误"。排查结论：
+  ①"编译错误"弹窗 = 自主编辑期间工作树的**临时编译错误**被用户侧编辑器
+  （gopls/IDE 保存即编译）持续弹窗——R31 的 s.mux.Use、R33 的字段名等
+  中间态。当前 HEAD 干净且 build/vet/test 全绿，编辑器重载后应消失。
+  ②托盘窗口诊断：运行 winforgedesk.exe 后 EnumWindows 找到 2 个
+  SystrayClass 窗口（两个测试实例各一），IsWindowVisible=False——这是
+  fyne systray 的**消息窗口**常态（托盘图标由 Shell_NotifyIcon 单独管理，
+  不等于该窗口可见性）；图标本身大概率藏在托盘溢出区（^ 图标），
+  需真机目视确认（点 ^ 展开或拖到常驻区）。
+- 测试遗留进程已全部清理；session.go gofmt 对齐补交。
+
 ### R34（2026-10-27）
 - CI 状态复核：desk 分支最近 5 次 run（R30-R33 全部 push）连续 success——
   R24 首绿后门禁持续稳定，无回归。
