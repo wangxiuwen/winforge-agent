@@ -15,10 +15,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // Config 是 desk.json 的内容，按用户存放（区别于 Agent 的 ProgramData 系统配置）。
+// 并发模型：Peers/字段会被 hub 多个 goroutine 读写（补连、accept、UI 命令），
+// 方法集内部互斥；直接字段访问仅限持有 hub.mu 的同步块。
 type Config struct {
+	mu sync.Mutex
+
 	// ID 是本机稳定标识，首次运行生成，配对双方靠它认人。
 	ID string `json:"id"`
 	// Name 是显示名，默认取主机名。
@@ -160,6 +165,8 @@ func SaveConfig(path string, cfg *Config) error {
 
 // Peer 返回指定 ID 的配对记录。
 func (c *Config) Peer(id string) (Peer, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, p := range c.Peers {
 		if p.ID == id {
 			return p, true
@@ -170,6 +177,8 @@ func (c *Config) Peer(id string) (Peer, bool) {
 
 // UpPeer 新增或更新一条配对记录并写盘。
 func (c *Config) UpPeer(path string, p Peer) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i := range c.Peers {
 		if c.Peers[i].ID == p.ID {
 			c.Peers[i] = p
@@ -182,6 +191,8 @@ func (c *Config) UpPeer(path string, p Peer) error {
 
 // RemovePeer 删除配对记录并写盘；对端不存在时报错。
 func (c *Config) RemovePeer(path, id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	out := c.Peers[:0]
 	found := false
 	for _, p := range c.Peers {
@@ -203,6 +214,8 @@ func (c *Config) SetPeerPosition(path, id, pos string) error {
 	if pos != "left" && pos != "right" && pos != "" {
 		return fmt.Errorf("非法方位 %q", pos)
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	found := false
 	for i := range c.Peers {
 		if c.Peers[i].Position == pos && pos != "" && c.Peers[i].ID != id {
@@ -221,6 +234,8 @@ func (c *Config) SetPeerPosition(path, id, pos string) error {
 
 // SetPeerEnabled 更新启用开关并写盘。
 func (c *Config) SetPeerEnabled(path, id string, on bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i := range c.Peers {
 		if c.Peers[i].ID == id {
 			c.Peers[i].Enabled = on

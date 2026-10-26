@@ -39,6 +39,16 @@
 
 ## 轮次记录
 
+### R21 续（CI 排查闭环，2026-10-27）
+- CI 失败日志经 ci-log 分支取回：**真 race——Config.UpPeer 写 Peers 切片 vs
+  无锁 cfg.Peer() 读并发**（dialSession 学地址写盘 vs accept 读）。修复：
+  Config 方法集（Peer/UpPeer/RemovePeer/SetPeerPosition/SetPeerEnabled）
+  内部互斥，调用方无论是否持 hub.mu 都安全（锁序恒为 hub.mu→cfg.mu）。
+- CI 可见性闭环：workflow 失败时把 test.log 推送到 ci-log 孤儿分支，
+  raw.githubusercontent.com 匿名可读——以后 CI 红了无需凭证即可诊断。
+- 诊断链路：加 desk 触发→失败→step summary 匿名不可见→artifact 要认证→
+  最终 git 推日志分支成功。本地 race 全量绿 + 冒烟通过，待 CI 复验。
+
 ### R21（2026-10-27）
 - ★流程修复：发现 desk 分支的 CI 从未运行——workflow 只触发 main 的 push 和
   PR，此前 20 轮 push 全部只有本地门禁。将 desk 加入 push 触发分支，
