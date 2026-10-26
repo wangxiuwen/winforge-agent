@@ -36,6 +36,9 @@ func (d *DeskApp) SendChat(id, text string) error      { return d.h.SendChat(id,
 func (d *DeskApp) SendFile(id, path string) error      { return d.h.SendFile(id, path) }
 func (d *DeskApp) TransferRespond(fid string, ok bool) { d.h.TransferRespond(fid, ok) }
 func (d *DeskApp) CancelTransfer(fid string)           { d.h.CancelTransfer(fid) }
+func (d *DeskApp) ChatHistory(peerID string) []desk.ChatMsg {
+	return d.h.ChatHistory(peerID)
+}
 func (d *DeskApp) TakeControl(id string) error         { return d.h.TakeControl(id, -1) }
 func (d *DeskApp) ReleaseControl()                     { d.h.ReleaseControl(-1) }
 func (d *DeskApp) ToggleShare(on bool)                 { d.h.ToggleShare(on) }

@@ -60,12 +60,26 @@ func (h *Hub) onEdge(edge Edge, yRatio float64) {
 			}
 		}
 	case roleControlled:
-		// 我正被控制：朝“控制器所在侧”的边推 = 拿回控制。
+		// 我正被控制：朝控制器侧的边推 = 拿回；朝另一侧有配对设备的边推 = 链式切换。
 		h.mu.Lock()
 		peerID := h.ctl.PeerID
 		h.mu.Unlock()
-		if peer, ok := h.cfg.Peer(peerID); ok && peer.Position != "" && edgeForPosition(peer.Position) == edge {
+		peer, ok := h.cfg.Peer(peerID)
+		if !ok {
+			return
+		}
+		if peer.Position != "" && edgeForPosition(peer.Position) == edge {
 			h.ReleaseControl(yRatio)
+			return
+		}
+		// 链式：本机另一侧的方位对端，请控制器把输入链切过去。
+		for _, p := range h.cfg.Peers {
+			if p.Enabled && p.ID != peerID && p.Position != "" && edgeForPosition(p.Position) == edge {
+				if s := h.sessionTo(peerID); s != nil {
+					_ = s.sendJSON(wireMsg{T: msgCtlChain, FID: p.ID, Y: yRatio})
+				}
+				return
+			}
 		}
 	}
 }
@@ -282,6 +296,35 @@ func (h *Hub) ReleaseControl(yRatio float64) {
 		case <-s.done:
 		}
 	}()
+}
+
+// onCtlChain 链式切换：被控端把输入焦点导向另一台（控制器改链目标）。
+func (h *Hub) onCtlChain(s *Session, m wireMsg) {
+	h.mu.Lock()
+	if h.ctl.Role != roleController || h.ctl.PeerID != s.peer.ID {
+		h.mu.Unlock()
+		return
+	}
+	targetID := m.FID
+	target := h.sessions[targetID]
+	h.mu.Unlock()
+	if target == nil || !target.Alive() {
+		_ = s.sendJSON(wireMsg{T: msgCtlDeny})
+		return
+	}
+	if _, ok := h.cfg.Peer(targetID); !ok {
+		_ = s.sendJSON(wireMsg{T: msgCtlDeny})
+		return
+	}
+	// 通知旧被控端复位，再本地清理；随后接上新目标（捕获短暂重建，v1 允许微小空窗）。
+	_ = s.sendJSON(wireMsg{T: msgCtlRelease, Y: 0})
+	h.endControlLocal()
+	if err := h.TakeControl(targetID, m.Y); err != nil {
+		_ = s.sendJSON(wireMsg{T: msgCtlDeny})
+		h.toast("warn", "链式切换失败: "+err.Error())
+	} else {
+		h.toast("info", "链式切换 → "+target.PeerName())
+	}
 }
 
 // onCtlRelease 对端结束了控制。

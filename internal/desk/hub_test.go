@@ -682,3 +682,115 @@ func TestControlIndicator(t *testing.T) {
 func seqEndsWith(seq []string, last string) bool {
 	return len(seq) > 0 && seq[len(seq)-1] == last
 }
+
+// TestChatPersistence 聊天记录落盘并在 Hub 重启后恢复。
+func TestChatPersistence(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerA := peerViews(b)[0] // B 眼中的 A
+	if err := b.SendChat(peerA.ID, "落盘消息一"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SendChat(peerA.ID, "落盘消息二"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "A 落盘收到的消息", func() bool {
+		return len(a.ChatHistory(peerViewsBID(b))) == 2
+	})
+	// B 端也应有两条发出记录（历史按键=对端 ID 存储）。
+	if len(b.ChatHistory(peerViewsBID(a))) != 2 {
+		t.Fatal("B 端历史缺失")
+	}
+	// 重启 B（同配置路径）：历史应恢复。
+	cfg := b.Snapshot()["self"].(map[string]interface{})
+	_ = cfg
+	b2, _ := NewHubFromExisting(t, b)
+	hist := b2.ChatHistory(peerA.ID)
+	if len(hist) != 2 || hist[0].Text != "落盘消息一" || !hist[0].Outgoing {
+		t.Fatalf("重启后历史不符: %+v", hist)
+	}
+}
+
+// peerViewsBID 返回 hub 自己的 ID（测试辅助）。
+func peerViewsBID(h *Hub) string {
+	return h.Snapshot()["self"].(map[string]interface{})["id"].(string)
+}
+
+// NewHubFromExisting 用同一配置路径重建 Hub（模拟重启）。
+func NewHubFromExisting(t *testing.T, old *Hub) (*Hub, string) {
+	t.Helper()
+	old.mu.Lock()
+	cfgPath := old.cfgPath
+	old.mu.Unlock()
+	cfg, err := LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewHub(cfg, cfgPath, Platform{}, log.New(os.Stderr, "[重启] ", log.LstdFlags))
+	if err := h.Start(testCtx(t)); err != nil {
+		t.Fatal(err)
+	}
+	return h, cfgPath
+}
+
+// TestChainSwitch 三台链式：A↔B↔C 顺序方位，A 控制 B 时 B 推 C 侧边 → 焦点转 C。
+func TestChainSwitch(t *testing.T) {
+	pa, pb, pc := newFakePlatform(), newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	c, _ := newTestHub(t, "主机C", pc)
+	// 全互联配对（链式要求控制器能直连新目标）。
+	pairTwo(t, a, b)
+	pairTwo(t, b, c)
+	pairTwo(t, a, c)
+	idOf := func(h *Hub) string { return peerViewsBID(h) }
+	aID, bID, cID := idOf(a), idOf(b), idOf(c)
+	// 方位：A|B|C 一字排开。
+	if err := b.PeerPosition(aID, "left"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PeerPosition(cID, "right"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.PeerPosition(bID, "right"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.PeerPosition(bID, "left"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.PeerPosition(aID, "right"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.PeerPosition(cID, "left"); err != nil {
+		t.Fatal(err)
+	}
+	// A 控制 B。
+	if err := a.TakeControl(bID, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "B 被控", func() bool {
+		return b.Snapshot()["control"].(ControlState).Role == roleControlled
+	})
+	// 链式请求（绕开边缘推挤时序，直接模拟 B 向 A 发 ctl_chain）。
+	b.mu.Lock()
+	s := b.sessions[aID]
+	b.mu.Unlock()
+	if s == nil {
+		t.Fatal("B→A 会话应在线")
+	}
+	_ = s.sendJSON(wireMsg{T: msgCtlChain, FID: cID, Y: 0.5})
+	waitFor(t, 8*time.Second, "C 进入被控态（链式完成）", func() bool {
+		return c.Snapshot()["control"].(ControlState).Role == roleControlled &&
+			a.Snapshot()["control"].(ControlState).Role == roleController
+	})
+	waitFor(t, 5*time.Second, "B 回到空闲", func() bool {
+		return b.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+	a.ReleaseControl(-1)
+	waitFor(t, 5*time.Second, "全体回空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle &&
+			c.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+}

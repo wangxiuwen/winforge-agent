@@ -17,6 +17,7 @@ function makeBridge() {
           peerPosition: b.PeerPosition, peerToggle: b.PeerToggle, peerRemove: b.PeerRemove,
           sendChat: b.SendChat, sendFile: b.SendFile, pickAndSendFile: b.PickAndSendFile,
           transferRespond: b.TransferRespond, cancelTransfer: b.CancelTransfer,
+          chatHistory: b.ChatHistory,
           takeControl: b.TakeControl, releaseControl: b.ReleaseControl,
           toggleShare: b.ToggleShare, openPath: b.OpenPath,
         };
@@ -33,6 +34,13 @@ function makeBridge() {
   const token = new URLSearchParams(location.search).get("t") || sessionStorage.getItem("wfdesk-token") || "";
   sessionStorage.setItem("wfdesk-token", token);
   async function rpc(cmd, args) {
+    if (cmd === "chatHistory") {
+      const r = await fetch("/api/rpc?t=" + encodeURIComponent(token), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd, args: args || [] }),
+      });
+      return r.json();
+    }
     const r = await fetch("/api/rpc?t=" + encodeURIComponent(token), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -202,7 +210,36 @@ function renderChatSelect() {
     sel.appendChild(o);
   }
   if (cur) sel.value = cur;
-  chatPeer = sel.value || chatPeer;
+  const next = sel.value || chatPeer;
+  if (next !== chatPeer || !(next in chatLog)) {
+    chatPeer = next;
+    loadHistory(chatPeer);
+    return;
+  }
+  chatPeer = next;
+}
+
+// loadHistory 每个对端的历史只在首次查看时拉一次（之后走实时事件）。
+const historyLoading = Object.create(null);
+function loadHistory(peerID) {
+  if (!peerID || peerID in chatLog || historyLoading[peerID]) {
+    renderChat();
+    return;
+  }
+  historyLoading[peerID] = true;
+  chatLog[peerID] = [];
+  bridge.call("chatHistory", peerID).then((list) => {
+    chatLog[peerID] = (list || []).map((m) => ({
+      from: m.outgoing ? "我" : peerName(peerID),
+      text: m.text, ts: m.ts, outgoing: m.outgoing,
+    }));
+    if (chatPeer === peerID) renderChat();
+  }).catch(() => {});
+}
+
+function peerName(id) {
+  const p = (S.peers || []).find(x => x.id === id);
+  return p ? p.name : "";
 }
 
 function renderChat() {

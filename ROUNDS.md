@@ -17,9 +17,9 @@
 - [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
 - [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
 - [x] R5 传输增强：取消（收发双侧+UI 按钮+对端联动）、接收进度 200ms 限频、32MB 冒烟实测（1GB 靠同一机制，未单独实测）
-- [ ] R2+ UI 打磨：聊天记录持久化（会话级）、连接状态动效（拖拽发送与多对端消息隔离已完成→R6）
+- [ ] R2+ UI 打磨：连接状态动效（已完成→R8；聊天持久化已完成→R9）
 - [ ] R2+ 控制体验：光标进入动画（边缘提示条已完成→R8，颜色效果待用户实测；Esc 见 R5）
-- [ ] R2+ 多对端拓扑（>2 台）：链式切换（方位互斥与控制互斥已由 TestMultiPeerTopology 覆盖→R6）
+- [x] R9 多对端拓扑：链式切换（被控端推向另一侧方位边 → ctl_chain → 控制器改链目标）
 - [x] R7 性能：移动事件 8ms 合帧（500→1 帧实测）+ capture→inject 往返延迟测量（本机 loopback ~50ms；真实局域网延迟待真机）
 - [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
 - [ ] R2+ 文档：README 截图位、SECURITY.md 补 desk 章节 threat model
@@ -38,6 +38,18 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R9（2026-10-26）
+- 聊天记录持久化：每对端一个 JSON（配置目录 chat/<peerID>.json，≤500 条，
+  原子重写），Hub 启动恢复；加载时过滤未来时间戳与超长文本（防手改文件注入）。
+  文件名强制 hex 正则校验防穿越。UI 首次查看某对端时拉一次历史（之后走实时事件），
+  HTTP rpc 与 Wails 绑定同步接入；e2e TestChatPersistence 覆盖收发两侧+重启恢复。
+- 链式切换：被控端朝"非控制器侧"的方位边推 → ctl_chain{target,y} 发给控制器 →
+  控制器通知旧被控端复位（ctl_release）+ 本地清理 + TakeControl(新目标)。
+  控制器与新目标必须已配对（无 PSK 无法建会话，天然安全边界）。
+  e2e TestChainSwitch：三 Hub 一字排开，A 控制 B 后链式转 C。
+- 坑：聊天历史按键=对端 ID（不是本机 ID），测试断言写错过一次；
+  链式必须显式给旧被控端发 ctl_release，否则它永远停在"被控制"状态。
 
 ### R8（2026-10-26）
 - 控制状态边缘提示条（Windows 分层窗口）：共享激活时在共享边显示 3px 常亮条

@@ -51,6 +51,7 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 		if ts == 0 {
 			ts = time.Now().UnixMilli()
 		}
+		h.recordChat(s.peer.ID, ChatMsg{Text: m.Text, Ts: ts, Outgoing: false})
 		h.emit("desk:chat", map[string]interface{}{
 			"from": s.PeerName(), "peer": s.peer.ID,
 			"text": m.Text, "ts": ts, "outgoing": false,
@@ -71,6 +72,8 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 		h.onCtlTakeOK(s)
 	case msgCtlDeny:
 		h.onCtlDeny(s)
+	case msgCtlChain:
+		h.onCtlChain(s, m)
 	case msgCtlRelease:
 		h.onCtlRelease(s, m)
 	case msgCtlReleaseOK:

@@ -189,6 +189,9 @@ func (s *uiServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		h.TransferRespond(argString(c.Args, 0), argBool(c.Args, 1))
 	case "cancelTransfer":
 		h.CancelTransfer(argString(c.Args, 0))
+	case "chatHistory":
+		_ = json.NewEncoder(w).Encode(h.ChatHistory(argString(c.Args, 0)))
+		return
 	case "takeControl":
 		err = h.TakeControl(argString(c.Args, 0), -1)
 	case "releaseControl":

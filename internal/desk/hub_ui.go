@@ -256,6 +256,7 @@ func (h *Hub) SendChat(peerID, text string) error {
 	if err := s.sendJSON(wireMsg{T: msgChat, Text: text, Ts: time.Now().UnixMilli()}); err != nil {
 		return err
 	}
+	h.recordChat(peerID, ChatMsg{Text: text, Ts: time.Now().UnixMilli(), Outgoing: true})
 	h.emit("desk:chat", map[string]interface{}{
 		"from": "我", "peer": peerID, "text": text,
 		"ts": time.Now().UnixMilli(), "outgoing": true,

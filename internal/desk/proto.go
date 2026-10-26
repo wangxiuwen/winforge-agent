@@ -47,6 +47,7 @@ const (
 	msgCtlTake      = "ctl_take"
 	msgCtlTakeOK    = "ctl_take_ok"
 	msgCtlDeny      = "ctl_deny"
+	msgCtlChain     = "ctl_chain"
 	msgCtlRelease   = "ctl_release"
 	msgCtlReleaseOK = "ctl_release_ok"
 	msgPing         = "ping"

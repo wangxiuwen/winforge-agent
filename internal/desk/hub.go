@@ -131,6 +131,7 @@ type Hub struct {
 	in  map[[16]byte]*incomingTransfer
 
 	tempUploads map[string]bool
+	chatHistory map[string][]ChatMsg
 
 	emittersMu sync.Mutex
 	emitters   []Emitter
@@ -159,6 +160,7 @@ func NewHub(cfg *Config, cfgPath string, platform Platform, logger *log.Logger) 
 		out:         map[[16]byte]*outgoingTransfer{},
 		in:          map[[16]byte]*incomingTransfer{},
 		tempUploads: map[string]bool{},
+		chatHistory: map[string][]ChatMsg{},
 		lastTry:     map[string]time.Time{},
 		wake:        make(chan struct{}, 1),
 		started:     time.Now(),
@@ -234,6 +236,7 @@ func (h *Hub) Start(ctx context.Context) error {
 	}
 	h.disc.StartPruner(ctx, 2*time.Second, 7*time.Second)
 
+	h.loadChatHistory()
 	go h.runSessions(ctx)
 	go h.watchHotkey(ctx)
 	go h.watchEscape(ctx)
@@ -427,6 +430,17 @@ func (h *Hub) dialSession(p Peer, addr string) {
 	// serve 是永不返回的读循环，必须在独立 goroutine 里跑，
 	// 否则 runSessions 的补连循环会被第一条会话永久卡死（多对端拨号失效）。
 	go s.serve()
+}
+
+// sessionTo 并发安全的存活会话查询。
+func (h *Hub) sessionTo(peerID string) *Session {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.sessions[peerID]
+	if s != nil && !s.Alive() {
+		return nil
+	}
+	return s
 }
 
 // controllingPeerID 返回当前控制状态涉及的对端（供 state 消息）。
