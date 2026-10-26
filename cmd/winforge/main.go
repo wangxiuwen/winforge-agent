@@ -78,9 +78,11 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `WinForge Agent — 从 Mac/Linux 驱动 Windows 嵌入式构建机
 
-多机协作（Windows 托盘程序）:
-  winforge desk [--ui auto|window|browser] [--no-tray] [--name NAME] [--config FILE]
+多机协作（局域网键鼠共享）:
+  winforgedesk.exe [--start-hidden]          # 桌面入口：窗口 + 托盘（Windows）
+  winforge desk [--ui browser] [--no-tray] [--name NAME] [--config FILE]
     局域网键鼠共享 / 消息与文件传输 / 互相控制；双端确认配对码完成配对。
+  winforge desk autostart on|off|status      # 开机自启
 
 Windows:
   winforge init [--config FILE] [--root DIR] [--listen ADDR]

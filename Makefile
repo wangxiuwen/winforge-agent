@@ -15,6 +15,8 @@ release:
 	mkdir -p dist
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-windows-amd64.exe ./cmd/winforge
 	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-windows-arm64.exe ./cmd/winforge
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS) -H=windowsgui" -o dist/winforgedesk-windows-amd64.exe ./cmd/winforgedesk
+	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS) -H=windowsgui" -o dist/winforgedesk-windows-arm64.exe ./cmd/winforgedesk
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-darwin-amd64 ./cmd/winforge
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-darwin-arm64 ./cmd/winforge
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-linux-amd64 ./cmd/winforge

@@ -14,7 +14,7 @@ import (
 	"github.com/wangxiuwen/winforge-agent/internal/desk"
 )
 
-// 桌面窗口（Wails）：同一套 web 前端，事件经 EventsEmit，命令走绑定方法。
+// Wails 桌面窗口：同一套 web 前端，事件经 EventsEmit，命令走绑定方法。
 
 var deskWailsCtx context.Context
 
@@ -62,7 +62,7 @@ func (deskWailsEmitter) Emit(event string, data interface{}) {
 	}
 }
 
-func runDeskUI(h *desk.Hub, startHidden bool) error {
+func runWindowUI(h *desk.Hub, startHidden bool) error {
 	return wails.Run(&options.App{
 		Title:            "WinForge Desk",
 		Width:            1100,

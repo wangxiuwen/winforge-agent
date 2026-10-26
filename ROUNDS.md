@@ -15,7 +15,7 @@
 - [x] R2 断线重连（e2e：强制断开 TCP → 自动重连 → 消息恢复）；杀进程级+控制态不卡键待真机
 - [x] R2 同机双实例发现：UDP SO_REUSEADDR（参考 internal/discovery/reuse_windows.go）
 - [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
-- [ ] R2+ 独立 GUI 构建 winforge-desk.exe（-H=windowsgui，无控制台黑窗；参见 monctl 经验）
+- [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
 - [ ] R2+ 传输增强：取消进行中传输、接收端进度限频、1GB 级大文件
 - [ ] R2+ UI 打磨：拖拽文件发送、聊天记录持久化（会话级）、多对端消息隔离、连接状态动效
 - [ ] R2+ 控制体验：控制时对端屏幕边缘提示条、光标进入动画、Esc 快捷交还
@@ -38,6 +38,21 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R4（2026-10-26）
+- 桌面运行体抽到 internal/deskapp（不 import Wails）：Options{WindowUI/WindowShow}
+  由 GUI 入口注入；`winforge desk` 回归纯 CLI（浏览器控制台），stdout 不再被污染
+  ——`winforge version` / `desk autostart status` 实测零 DEB 行。
+- 新增独立入口 cmd/winforgedesk：Wails 窗口 + 托盘 + autostart 子命令；日志固定写
+  %APPDATA%\winforge\desk.log（O_APPEND），排障"双击没反应"有据可查。
+- Makefile release 增加 winforgedesk-windows-amd64/arm64.exe，-ldflags -H=windowsgui
+  （本机构建通过；真机双击无黑窗待用户实测）。
+- 实机验证：GUI 入口（控制台版）启动 9s——进程存活、日志落盘、控制端口 41831 监听。
+  -race 全绿，冒烟全通过（走新 deskapp 路径）。
+- autostart 命令行生成升级：同目录存在 winforgedesk.exe 时自启指向它，
+  否则回退 `<CLI> desk --start-hidden`。
+- 结构坑：ListenPacket/registry 这些平台差异都要成对写 build-tag 文件；
+  cmd 下两个 main 不能共享代码，公共逻辑必须下沉 internal 包（deskapp 即为此而生）。
 
 ### R3（2026-10-26）
 - 新增 `winforge desk autostart on|off|status`（HKCU Run 键，值名 WinForgeDesk，

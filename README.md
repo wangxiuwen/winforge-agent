@@ -73,7 +73,7 @@ WinForge 拥有启动进程和读写 workspace 的能力，因此只应部署在
 
 ## 多机协作：`winforge desk`（键鼠共享托盘）
 
-在一台机器上运行 `winforge desk`（Windows 默认起 Wails 桌面窗口 + 系统托盘），
+双击 `winforgedesk.exe`（Windows 桌面入口，窗口 + 托盘）或运行 `winforge desk`（浏览器控制台），
 同一局域网内安装了本程序的机器会互相发现。三大能力：
 
 - **共享** — 多台电脑共用一套键鼠：把对端设为屏幕左/右方位后，鼠标推过对应
@@ -88,14 +88,17 @@ ECDH 派生，两边不一致即说明有中间人）→ 双方各点一次"确�
 用派生的 PSK 认证每次连接，会话流量全程 AES-256-GCM 加密。
 
 ```powershell
-winforge desk                       # 托盘 + 桌面窗口（Windows）
-winforge desk --ui browser          # 浏览器控制台（127.0.0.1，随机令牌）
-winforge desk --no-tray --ui browser  # 无头模式（自动化自测入口）
+winforgedesk.exe                    # 桌面入口：Wails 窗口 + 托盘常驻（windowsgui 无黑窗）
+winforgedesk.exe --start-hidden     # 开机自启形态：只留托盘
+winforge desk                       # CLI 入口：浏览器控制台（127.0.0.1，随机令牌）
+winforge desk --no-tray             # 无头模式（自动化自测入口）
+winforge desk autostart on|off|status
 ```
 
 默认端口：发现 41832/UDP、会话 41831/TCP、控制台 41830（仅 127.0.0.1），
 均可在配置文件（`%APPDATA%\winforge\desk.json`）修改。键鼠控制当前仅
 Windows 实现；macOS/Linux 可用配对、消息、文件传输，构建不受影响。
+GUI 版运行日志在 `%APPDATA%\winforge\desk.log`。
 
 ## 开发
 
