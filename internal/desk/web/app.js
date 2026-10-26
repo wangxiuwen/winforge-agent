@@ -1,11 +1,9 @@
-// WinForge Desk 控制台。同时适配两种宿主：
-//   Wails 桌面窗口（window.go 存在，走绑定 + EventsOn）
-//   浏览器模式（走 /api/rpc + WebSocket）
+/* WinForge Desk —— 微信风格前端：图标栏 + 列表栏 + 内容区 */
 "use strict";
 
-// ---------- 桥接 ----------
+/* ================= 桥接 ================= */
 function makeBridge() {
-  if (window.go && window.go.main && window.go.main.Desk) {
+  if (window.go && window.go.main.Desk) {
     const b = window.go.main.Desk;
     const rt = window.runtime;
     return {
@@ -25,22 +23,13 @@ function makeBridge() {
         if (!fn) return Promise.reject(new Error("未知命令 " + cmd));
         return fn(...args);
       },
-      on: (event, cb) => {
-        rt.EventsOn(event, (data) => cb(data));
-      },
+      on: (event, cb) => { rt.EventsOn(event, (data) => cb(data)); },
       pickFile: () => Promise.reject(new Error("由 Go 侧对话框处理")),
     };
   }
   const token = new URLSearchParams(location.search).get("t") || sessionStorage.getItem("wfdesk-token") || "";
   sessionStorage.setItem("wfdesk-token", token);
   async function rpc(cmd, args) {
-    if (cmd === "chatHistory") {
-      const r = await fetch("/api/rpc?t=" + encodeURIComponent(token), {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd, args: args || [] }),
-      });
-      return r.json();
-    }
     const r = await fetch("/api/rpc?t=" + encodeURIComponent(token), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -80,10 +69,15 @@ function makeBridge() {
 }
 const bridge = makeBridge();
 
-// ---------- 状态 ----------
-let S = { peers: [], presence: [], control: { role: 0 } };
-let chatPeer = "";
-const chatLog = Object.create(null); // peerID -> [{from, text, ts, outgoing}]，多对端互相隔离
+/* ================= 状态 ================= */
+let S = { peers: [], presence: [], control: { role: 0 }, self: {} };
+let activeTab = "share";     // share / transfer / control
+let selectedPeer = "";       // 共享/控制列表选中的对端
+let chatPeer = "";           // 传输视图当前对话对端
+const chatLog = Object.create(null); // peerId -> [{from,text,ts,outgoing}]
+const transfers = new Map();         // fid -> view
+const transferRate = new Map();      // fid -> {lastRecv, lastAt, ema}
+let startupWarnShown = false;
 
 const $ = (id) => document.getElementById(id);
 function esc(s) {
@@ -91,7 +85,6 @@ function esc(s) {
   d.textContent = String(s == null ? "" : s);
   return d.innerHTML;
 }
-
 function toast(level, text) {
   const t = document.createElement("div");
   t.className = "toast " + (level || "info");
@@ -99,243 +92,249 @@ function toast(level, text) {
   $("toasts").appendChild(t);
   setTimeout(() => t.remove(), 5200);
 }
-
 function fmtSize(n) {
-  if (n > 1 << 30) return (n / (1 << 30)).toFixed(1) + " GB";
   if (n > 1 << 20) return (n / (1 << 20)).toFixed(1) + " MB";
   if (n > 1024) return (n / 1024).toFixed(0) + " KB";
   return n + " B";
 }
 function fmtTime(ts) {
   const d = new Date(ts);
-  return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
-}
-
-// ---------- 渲染 ----------
-function render() {
-  $("self-name").textContent = S.self ? S.self.name : "";
-  const hotkey = (S.self && S.self.hotkey) || "Ctrl+Alt+D";
-  $("hotkey-hint").textContent = "切换热键 " + hotkey;
-  $("hotkey-inline").textContent = hotkey;
-  $("hotkey-inline2").textContent = hotkey;
-  $("share-toggle").checked = !!S.share;
-
-  const ctl = S.control || { role: 0 };
-  const st = $("ctl-status");
-  st.className = "ctl-status" + (ctl.role === 1 ? " ctrl" : ctl.role === 2 ? " victim" : "");
-  st.textContent = ctl.role === 1 ? "正在控制 " + ctl.peer_name : ctl.role === 2 ? ctl.peer_name + " 正在控制本机" : "空闲";
-  const big = $("control-big");
-  big.className = "control-big" + (ctl.role === 1 ? " ctrl" : ctl.role === 2 ? " victim" : "");
-  big.textContent = ctl.role === 1 ? "鼠标键盘正在控制「" + ctl.peer_name + "」"
-    : ctl.role === 2 ? "「" + ctl.peer_name + "」正在控制本机" : "空闲 —— 通过边缘推挤、热键或下方按钮开始";
-
-  renderPresence();
-  renderPaired();
-  renderControl();
-  renderChatSelect();
-  renderChat();
-  renderTransfers();
-}
-
-function renderPresence() {
-  const box = $("presence-list");
-  const known = new Set(S.peers.map(p => p.id));
-  const list = (S.presence || []).filter(p => p.id && !known.has(p.id));
-  if (!list.length) {
-    box.innerHTML = '<div class="card"><span class="meta">正在扫描局域网…未发现设备时确认双方都在运行且端口一致（默认 41832/UDP）</span></div>';
-    return;
-  }
-  box.innerHTML = "";
-  for (const p of list) {
-    const c = document.createElement("div");
-    c.className = "card";
-    c.innerHTML = `<span class="dot on"></span><span class="name">${esc(p.name)}</span>
-      <span class="meta">${esc(p.addr)}${p.port ? ":" + p.port : ""}</span><span class="grow"></span>
-      <button data-act="pair" data-addr="${esc(p.addr)}${p.port ? ":" + p.port : ""}">配对</button>`;
-    box.appendChild(c);
-  }
-}
-
-function renderPaired() {
-  const box = $("paired-list");
-  box.innerHTML = "";
-  if (!S.peers.length) {
-    box.innerHTML = '<div class="card"><span class="meta">还没有配对设备</span></div>';
-    return;
-  }
-  for (const p of S.peers) {
-    const c = document.createElement("div");
-    c.className = "card";
-    c.innerHTML = `<span class="dot ${p.online ? "on" : ""}"></span><span class="name">${esc(p.name)}</span>
-      <span class="meta">${p.online ? "在线" : "离线"}${p.addr ? " · " + esc(p.addr) : ""}</span><span class="grow"></span>
-      <span class="pos-group">
-        <button data-act="pos" data-id="${p.id}" data-pos="left" class="${p.position === "left" ? "on" : ""}">← 左</button>
-        <button data-act="pos" data-id="${p.id}" data-pos="" class="${!p.position ? "on" : ""}">·</button>
-        <button data-act="pos" data-id="${p.id}" data-pos="right" class="${p.position === "right" ? "on" : ""}">右 →</button>
-      </span>
-      <button data-act="ctl" data-id="${p.id}" ${p.online ? "" : "disabled"}>控制</button>
-      <button class="alt" data-act="toggle" data-id="${p.id}">${p.enabled ? "停用" : "启用"}</button>
-      <button class="danger" data-act="remove" data-id="${p.id}">删除</button>`;
-    box.appendChild(c);
-  }
-}
-
-function renderControl() {
-  const box = $("control-peers");
-  box.innerHTML = "";
-  for (const p of (S.peers || [])) {
-    if (!p.enabled) continue;
-    const c = document.createElement("div");
-    c.className = "card";
-    c.innerHTML = `<span class="dot ${p.online ? "on" : ""}"></span><span class="name">${esc(p.name)}</span>
-      <span class="meta">${esc(p.position === "left" ? "在左边" : p.position === "right" ? "在右边" : "未设方位")}</span>
-      <span class="grow"></span>
-      <button data-act="ctl" data-id="${p.id}" ${p.online && (!S.control || S.control.role === 0) ? "" : "disabled"}>控制这台</button>
-      <button class="alt" data-act="unctl" ${S.control && S.control.role !== 0 ? "" : "disabled"}>结束共享</button>`;
-    box.appendChild(c);
-  }
-  if (!(S.peers || []).some(p => p.enabled)) {
-    box.innerHTML = '<div class="card"><span class="meta">先在"共享"页配对设备</span></div>';
-  }
-}
-
-function renderChatSelect() {
-  const sel = $("chat-peer");
-  const cur = sel.value;
-  sel.innerHTML = "";
-  for (const p of S.peers) {
-    const o = document.createElement("option");
-    o.value = p.id;
-    o.textContent = p.name + (p.online ? "" : "（离线）");
-    sel.appendChild(o);
-  }
-  if (cur) sel.value = cur;
-  const next = sel.value || chatPeer;
-  if (next !== chatPeer || !(next in chatLog)) {
-    chatPeer = next;
-    loadHistory(chatPeer);
-    return;
-  }
-  chatPeer = next;
-}
-
-// 清空当前对话：后端删记录文件，前端清内存桶。
-function clearCurrentChat() {
-  if (!chatPeer) return;
-  if (!confirm("清空与该设备的本地聊天记录？（对端不受影响）")) return;
-  bridge.call("clearChat", chatPeer).catch(err => toast("error", String(err)));
-  delete chatLog[chatPeer];
-  renderChat();
-}
-
-// loadHistory 每个对端的历史只在首次查看时拉一次（之后走实时事件）。
-const historyLoading = Object.create(null);
-function loadHistory(peerID) {
-  if (!peerID || peerID in chatLog || historyLoading[peerID]) {
-    renderChat();
-    return;
-  }
-  historyLoading[peerID] = true;
-  chatLog[peerID] = [];
-  bridge.call("chatHistory", peerID).then((list) => {
-    chatLog[peerID] = (list || []).map((m) => ({
-      from: m.outgoing ? "我" : peerName(peerID),
-      text: m.text, ts: m.ts, outgoing: m.outgoing,
-    }));
-    if (chatPeer === peerID) renderChat();
-  }).catch(() => {});
-}
-
-function peerName(id) {
-  const p = (S.peers || []).find(x => x.id === id);
-  return p ? p.name : "";
-}
-
-function renderChat() {
-  const box = $("chat-log");
-  const list = chatLog[chatPeer] || [];
-  box.innerHTML = list.map(m =>
-    `<div class="msg ${m.outgoing ? "out" : ""}"><div class="who">${esc(m.from)} · ${fmtTime(m.ts)}</div>${esc(m.text)}</div>`
-  ).join("");
-  box.scrollTop = box.scrollHeight;
-}
-
-const transfers = new Map(); // id -> view
-// 速率估算：基于最近两次 progress 事件的字节差/时间差（EMA 平滑）。
-const transferRate = new Map(); // id -> {lastRecv, lastAt, ema}
-function updateRate(id, t) {
-  if (t.state !== "receiving" && t.state !== "sending") {
-    transferRate.delete(id);
-    return 0;
-  }
-  const now = performance.now();
-  const prev = transferRate.get(id);
-  if (!prev) {
-    transferRate.set(id, { lastRecv: t.recv || 0, lastAt: now, ema: 0 });
-    return 0;
-  }
-  const dt = (now - prev.lastAt) / 1000;
-  const dBytes = (t.recv || 0) - prev.lastRecv;
-  let rate = 0;
-  if (dt > 0.05 && dBytes > 0) rate = dBytes / dt;
-  const ema = prev.ema ? prev.ema * 0.7 + rate * 0.3 : rate;
-  transferRate.set(id, { lastRecv: t.recv || 0, lastAt: now, ema });
-  return ema;
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 function fmtRate(bps) {
   if (bps > 1 << 20) return (bps / (1 << 20)).toFixed(1) + " MB/s";
   if (bps > 1024) return (bps / 1024).toFixed(0) + " KB/s";
   return bps.toFixed(0) + " B/s";
 }
+function peerById(id) { return (S.peers || []).find(p => p.id === id); }
+function peerName(id) { const p = peerById(id); return p ? p.name : (id || "").slice(0, 8); }
+
+/* ================= 渲染 ================= */
+function render() {
+  renderHeader();
+  renderListPanel();
+  renderContent();
+  maybeShowStartupWarning();
+}
+function renderHeader() {
+  const st = S.control || { role: 0 };
+  const titles = { share: "共享", transfer: "传输", control: "控制" };
+  $("content-title").textContent = titles[activeTab] || "共享";
+  $("share-toggle").checked = !!S.share;
+  $("hotkey-hint").textContent = "热键 " + ((S.self && S.self.hotkey) || "Ctrl+Alt+D");
+  const hi = $("hotkey-inline");
+  if (hi) hi.textContent = (S.self && S.self.hotkey) || "Ctrl+Alt+D";
+}
+function renderListPanel() {
+  const title = { share: "设备", transfer: "聊天", control: "设备" }[activeTab] || "设备";
+  $("list-title").textContent = title;
+  const box = $("peer-list");
+  box.innerHTML = "";
+  const kw = ($("search").value || "").trim().toLowerCase();
+  const known = new Set((S.peers || []).map(p => p.id));
+  const presence = (S.presence || []).filter(p => !known.has(p.id) &&
+    (!kw || p.name.toLowerCase().includes(kw)));
+  // 已配对设备
+  for (const p of (S.peers || [])) {
+    if (kw && !p.name.toLowerCase().includes(kw)) continue;
+    const sel = (activeTab !== "transfer" && p.id === selectedPeer) ||
+                (activeTab === "transfer" && p.id === chatPeer);
+    const item = document.createElement("div");
+    item.className = "peer-item" + (sel ? " selected" : "");
+    item.innerHTML =
+      '<div class="peer-avatar' + (p.online ? "" : " off") + '">' + esc((p.name || "?")[0]) + '</div>' +
+      '<div class="peer-info"><div class="peer-name">' + esc(p.name) + '</div>' +
+      '<div class="peer-sub">' + (activeTab === "transfer" ? chatPreview(p.id) :
+        (p.online ? "在线" : "离线") + (p.addr ? " · " + esc(p.addr) : "")) + '</div></div>' +
+      '<div class="peer-actions">' +
+      (p.position === "left" ? '<span>←左</span>' : p.position === "right" ? '<span>右→</span>' : '') +
+      '</div>';
+    item.onclick = () => {
+      selectedPeer = p.id;
+      if (activeTab === "transfer") { chatPeer = p.id; ensureChatLog(p.id); }
+      render();
+    };
+    box.appendChild(item);
+  }
+  // 未配对的发现设备（仅共享 tab 展示可配对）
+  if (activeTab === "share") {
+    for (const p of presence) {
+      if (kw && !p.name.toLowerCase().includes(kw)) continue;
+      const item = document.createElement("div");
+      item.className = "peer-item";
+      item.innerHTML =
+        '<div class="peer-avatar off">?</div>' +
+        '<div class="peer-info"><div class="peer-name">' + esc(p.name) + '</div>' +
+        '<div class="peer-sub">未配对 · ' + esc(p.addr) + '</div></div>' +
+        '<div class="peer-actions"><button class="btn-mini" data-act="pair" data-addr="' + esc(p.addr) + '">配对</button></div>';
+      box.appendChild(item);
+    }
+  }
+  if (!box.children.length) {
+    box.innerHTML = '<div class="empty-tip">' + (S.peers.length ? "无匹配设备" :
+      "尚未配对设备<br>等待局域网发现或手动输入地址配对") + '</div>';
+  }
+}
+function chatPreview(peerId) {
+  const list = chatLog[peerId] || [];
+  const last = list[list.length - 1];
+  if (!last) return "暂无消息";
+  return (last.outgoing ? "我: " : "") + String(last.text).slice(0, 20);
+}
+function ensureChatLog(id) {
+  if (!(id in chatLog)) {
+    chatLog[id] = [];
+    bridge.call("chatHistory", id).then((list) => {
+      chatLog[id] = (list || []).map(x => ({
+        from: x.outgoing ? "我" : peerName(id), text: x.text, ts: x.ts, outgoing: x.outgoing,
+      }));
+      if (chatPeer === id) renderChat();
+    }).catch(() => {});
+  }
+}
+function renderContent() {
+  if (activeTab === "transfer") renderTransferView();
+  else if (activeTab === "control") renderControlView();
+  else renderShareDetail();
+}
+function renderShareDetail() {
+  const box = $("share-detail");
+  const p = peerById(selectedPeer);
+  if (!p) {
+    box.innerHTML = '<div class="guide"><p>在左侧选择一台设备查看详情。</p>' +
+      '<p>配对：两台机器显示<b>同一个 6 位配对码</b>，两边都点确认即完成。</p>' +
+      '<p>方位（左/右）用于屏幕边缘推挤切换；热键 <b>' + esc((S.self && S.self.hotkey) || "Ctrl+Alt+D") +
+      '</b> 可随时切换控制。</p></div>';
+    return;
+  }
+  box.innerHTML =
+    '<div class="detail-card"><h4>' + esc(p.name) + '</h4>' +
+    '<div class="detail-row"><span class="k">状态</span><span class="dot ' + (p.online ? "on" : "") + '"></span>' +
+    (p.online ? "在线" : "离线") + '</div>' +
+    '<div class="detail-row"><span class="k">地址</span>' + esc(p.addr || "未知") + '</div>' +
+    '<div class="detail-row"><span class="k">方位</span>' +
+    '<span class="pos-group">' +
+    '<button data-act="pos" data-id="' + p.id + '" data-pos="left" class="' + (p.position === "left" ? "on" : "") + '">← 左</button>' +
+    '<button data-act="pos" data-id="' + p.id + '" data-pos="" class="' + (!p.position ? "on" : "") + '">·</button>' +
+    '<button data-act="pos" data-id="' + p.id + '" data-pos="right" class="' + (p.position === "right" ? "on" : "") + '">右 →</button>' +
+    '</span></div>' +
+    '<div class="detail-actions">' +
+    '<button data-act="ctl" data-id="' + p.id + '"' + (p.online ? "" : " disabled") + '>控制这台</button>' +
+    '<button class="ghost" data-act="toggle" data-id="' + p.id + '">' + (p.enabled ? "停用" : "启用") + '</button>' +
+    '<button class="danger" data-act="remove" data-id="' + p.id + '">删除配对</button>' +
+    '</div></div>';
+}
+function renderControlView() {
+  const ctl = S.control || { role: 0 };
+  const big = document.createElement("div");
+  big.className = "ctl-big" + (ctl.role === 1 ? " ctrl" : ctl.role === 2 ? " victim" : "");
+  big.textContent = ctl.role === 1 ? "正在控制「" + ctl.peer_name + "」" :
+    ctl.role === 2 ? "「" + ctl.peer_name + "」正在控制本机" : "空闲";
+  const box = $("control-detail");
+  box.innerHTML = "";
+  box.appendChild(big);
+  const card = document.createElement("div");
+  card.className = "detail-card";
+  let rows = "";
+  for (const p of (S.peers || [])) {
+    if (!p.enabled) continue;
+    rows += '<div class="detail-row"><span class="dot ' + (p.online ? "on" : "") + '"></span>' +
+      '<b>' + esc(p.name) + '</b><span class="k">' + esc(p.position === "left" ? "左" : p.position === "right" ? "右" : "未设方位") + '</span>' +
+      '<button class="btn-mini" data-act="ctl" data-id="' + p.id + '"' +
+      (p.online && ctl.role === 0 ? "" : " disabled") + '>控制</button></div>';
+  }
+  card.innerHTML = rows || '<div class="empty-tip">暂无配对设备</div>';
+  box.appendChild(card);
+}
+function renderTransferView() {
+  ensureChatLog(chatPeer);
+  renderChatHeader();
+  renderChat();
+  renderTransfers();
+}
+function renderChatHeader() {
+  $("chat-peer-name").textContent = chatPeer ? peerName(chatPeer) : "选择设备";
+}
+function renderChat() {
+  const box = $("chat-log");
+  const list = chatLog[chatPeer] || [];
+  box.innerHTML = list.map(m =>
+    '<div class="msg-row ' + (m.outgoing ? "me" : "their") + '">' +
+    '<div class="msg-avatar">' + (m.outgoing ? "我" : esc(peerName(chatPeer)[0] || "?")) + '</div>' +
+    '<div><div class="msg-time">' + fmtTime(m.ts) + '</div>' +
+    '<div class="msg-bubble">' + esc(m.text) + '</div></div></div>'
+  ).join("");
+  box.scrollTop = box.scrollHeight;
+}
+const rateEma = new Map();
 function renderTransfers() {
   const box = $("transfer-list");
   box.innerHTML = "";
+  const now = performance.now();
   for (const [id, t] of transfers) {
     const pct = t.size ? Math.min(100, Math.round((t.recv || 0) * 100 / t.size)) : 0;
-    const rate = updateRate(id, t);
-    const rateText = (t.state === "receiving" || t.state === "sending") && rate > 0
-      ? " · " + fmtRate(rate) : "";
+    const active = t.state === "receiving" || t.state === "sending";
+    let rate = 0;
+    if (active) {
+      const prev = rateEma.get(id);
+      if (prev && t.recv > prev.recv) {
+        const dt = (now - prev.at) / 1000;
+        if (dt > 0.05) rate = (t.recv - prev.recv) / dt;
+      }
+      const ema = prev && prev.ema ? prev.ema * 0.6 + rate * 0.4 : rate;
+      rateEma.set(id, { recv: t.recv, at: now, ema });
+    } else if (!active && rateEma.has(id) && (t.state === "done" || t.state === "failed" ||
+               t.state === "cancelled" || t.state === "rejected")) {
+      rateEma.delete(id);
+    }
     const el = document.createElement("div");
-    el.className = "tr-item";
-    const stateText = { offer: "等待你确认", accepted: "已接受", receiving: "接收中", sending: "发送中",
-      sent: "已发出", done: "已完成", failed: "失败", rejected: "被拒收", cancelled: "已取消" }[t.state] || t.state;
-    el.innerHTML = `<div class="row">
-        <span class="name">${t.dir === "in" ? "↓ " : "↑ "}${esc(t.name || "")}</span>
-        <span class="grow"></span><span class="state ${t.state}">${stateText} ${t.size ? fmtSize(t.recv || 0) + "/" + fmtSize(t.size) : ""}${rateText}</span>
-      </div>
-      <div class="bar"><div style="width:${pct}%"></div></div>
-      <div class="row" style="margin-top:6px">
-        <span class="grow"></span>
-        ${t.state === "offer" ? `<button data-act="tr-yes" data-id="${id}">接收</button>
-          <button class="danger" data-act="tr-no" data-id="${id}">拒收</button>` : ""}
-        ${(t.state === "receiving" || t.state === "sending") ? `<button class="danger" data-act="tr-cancel" data-id="${id}">取消</button>` : ""}
-        ${t.state === "done" && t.path ? `<button class="alt" data-act="open" data-path="${esc(t.path)}">打开</button>` : ""}
-      </div>`;
+    el.className = "tr-card";
+    const stateText = { offer: "等待确认", receiving: "接收中", sending: "发送中",
+      sent: "已发出", done: "已完成", failed: "失败", rejected: "被拒收",
+      cancelled: "已取消" }[t.state] || t.state;
+    const rateText = active && rate > 0 ? " · " + fmtRate(rate) : "";
+    el.innerHTML = '<div class="row">' +
+      '<span class="tname">' + (t.dir === "in" ? "↓ " : "↑ ") + esc(t.name || "") + '</span>' +
+      '<span class="tstate ' + t.state + '">' + stateText + " " +
+      (t.size ? fmtSize(t.recv || 0) + "/" + fmtSize(t.size) : "") + rateText + '</span></div>' +
+      '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
+      '<div class="actions">' +
+      (t.state === "offer" ? '<button class="btn-mini" data-act="tr-yes" data-id="' + id + '">接收</button>' +
+        '<button class="danger" data-act="tr-no" data-id="' + id + '">拒收</button>' : "") +
+      (active ? '<button class="danger" data-act="tr-cancel" data-id="' + id + '">取消</button>' : "") +
+      (t.state === "done" && t.path ? '<button class="btn-mini" data-act="open" data-path="' + esc(t.path) + '">打开</button>' : "") +
+      '</div>';
     box.appendChild(el);
+  }
+  if (!transfers.size) {
+    box.innerHTML = '<div class="empty-tip">暂无传输任务</div>';
   }
 }
 
-// ---------- 事件 ----------
-document.querySelectorAll("nav .tab").forEach(b => b.onclick = () => {
-  document.querySelectorAll("nav .tab").forEach(x => x.classList.remove("active"));
-  document.querySelectorAll(".tab-page").forEach(x => x.classList.remove("active"));
-  b.classList.add("active");
-  $("tab-" + b.dataset.tab).classList.add("active");
-});
-
+/* ================= 事件绑定 ================= */
 document.body.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
-  const act = btn.dataset.act;
-  const id = btn.dataset.id;
+  const act = btn.dataset.act, id = btn.dataset.id;
   if (act === "pair") bridge.call("pairStart", btn.dataset.addr).catch(err => toast("error", String(err)));
-  if (act === "pos") bridge.call("peerPosition", id, btn.dataset.pos).catch(() => {});
+  if (act === "pos") bridge.call("peerPosition", id, btn.dataset.pos).then(() => render()).catch(() => {});
   if (act === "toggle") {
-    const p = S.peers.find(x => x.id === id);
-    if (p) bridge.call("peerToggle", id, !p.enabled).catch(() => {});
+    const p = peerById(id);
+    if (p) bridge.call("peerToggle", id, !p.enabled).then(() => render()).catch(() => {});
   }
-  if (act === "remove") { if (confirm("删除该配对？双方都需要重新配对。")) bridge.call("peerRemove", id).catch(() => {}); }
-  if (act === "ctl") bridge.call("takeControl", id).then(r => { if (r && r.error) toast("warn", r.error); }).catch(err => toast("warn", String(err)));
+  if (act === "remove") {
+    if (confirm("删除该配对？双方都需要重新配对。")) {
+      bridge.call("peerRemove", id).then(() => {
+        if (selectedPeer === id) selectedPeer = "";
+        render();
+      }).catch(() => {});
+    }
+  }
+  if (act === "ctl") {
+    bridge.call("takeControl", id).then(r => {
+      if (r && r.error) toast("warn", r.error);
+    }).catch(err => toast("warn", String(err)));
+  }
   if (act === "unctl") bridge.call("releaseControl").catch(() => {});
   if (act === "tr-yes") bridge.call("transferRespond", id, true).catch(() => {});
   if (act === "tr-no") bridge.call("transferRespond", id, false).catch(() => {});
@@ -343,17 +342,19 @@ document.body.addEventListener("click", (e) => {
   if (act === "open") bridge.call("openPath", btn.dataset.path).catch(err => toast("error", String(err)));
 });
 
-$("share-toggle").onchange = (e) => bridge.call("toggleShare", e.target.checked).catch(() => {});
-$("chat-send").onclick = sendChat;
-$("chat-text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
-function sendChat() {
-  const v = $("chat-text").value.trim();
-  if (!v || !chatPeer) return;
-  bridge.call("sendChat", chatPeer, v)
-    .then((r) => { if (r && r.error) toast("warn", r.error); $("chat-text").value = ""; })
-    .catch(err => toast("warn", String(err)));
-}
-
+$("share-toggle").addEventListener("change", (e) =>
+  bridge.call("toggleShare", e.target.checked).then(() => render()).catch(() => {}));
+$("search").addEventListener("input", () => renderListPanel());
+$("btn-pair").onclick = () => showPairAddressModal();
+$("chat-send").onclick = sendChatMsg;
+$("chat-text").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChatMsg(); });
+$("chat-clear").onclick = () => {
+  if (!chatPeer) return;
+  if (!confirm("清空与该设备的本地聊天记录？（对端不受影响）")) return;
+  bridge.call("clearChat", chatPeer).catch(err => toast("error", String(err)));
+  delete chatLog[chatPeer];
+  renderChat();
+};
 $("file-send").onclick = () => {
   const path = $("file-path").value.trim();
   if (!path || !chatPeer) return;
@@ -372,62 +373,40 @@ $("file-pick").onclick = async () => {
   }).catch(err => toast("error", String(err)));
 };
 $("open-downloads").onclick = () => bridge.call("openPath", "").catch(err => toast("error", String(err)));
-$("chat-clear").onclick = clearCurrentChat;
+$("btn-exit").onclick = () => toast("info", "请从系统托盘图标右键退出");
 
-// ---------- 服务端/宿主事件 ----------
-bridge.on("desk:state", (s) => { S = s; render(); });
-bridge.on("desk:toast", (t) => toast(t.level, t.text));
-bridge.on("desk:chat", (m) => {
-  const list = (chatLog[m.peer] ||= []);
-  list.push(m);
-  if (list.length > 500) list.shift();
-  if (m.peer === chatPeer) renderChat();
-});
-bridge.on("desk:transfer", (t) => {
-  const cur = transfers.get(t.id) || {};
-  transfers.set(t.id, Object.assign(cur, t));
-  renderTransfers();
-});
-bridge.on("desk:pair", (p) => renderPairModal(p));
-bridge.on("desk:control", (c) => { if (S) { S.control = c; render(); } });
+function sendChatMsg() {
+  const v = $("chat-text").value.trim();
+  if (!v || !chatPeer) return;
+  bridge.call("sendChat", chatPeer, v).then((r) => {
+    if (r && r.error) toast("warn", r.error); else $("chat-text").value = "";
+  }).catch(err => toast("warn", String(err)));
+}
 
-// ---------- 拖拽发送 ----------
-const dropHint = document.createElement("div");
-dropHint.id = "drop-hint";
-dropHint.textContent = "松手发送给选中的设备";
-document.body.appendChild(dropHint);
-let dragDepth = 0;
-window.addEventListener("dragenter", (e) => {
-  e.preventDefault();
-  dragDepth++;
-  dropHint.classList.add("on");
-});
-window.addEventListener("dragleave", () => {
-  if (--dragDepth <= 0) { dragDepth = 0; dropHint.classList.remove("on"); }
-});
-window.addEventListener("dragover", (e) => e.preventDefault());
-window.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dragDepth = 0;
-  dropHint.classList.remove("on");
-  if (bridge.mode !== "http" || !chatPeer) return;
-  for (const f of e.dataTransfer.files) {
-    bridge.upload(f, chatPeer).then(r => {
-      if (r && r.error) toast("error", r.error);
-    }).catch(err => toast("error", String(err)));
-  }
-});
-// Wails 拖放走 Go 侧路径事件。
-bridge.on("desk:filedrop", (paths) => {
-  if (!Array.isArray(paths) || !chatPeer) return;
-  for (const p of paths) {
-    bridge.call("sendFile", chatPeer, p)
-      .then(r => { if (r && r.error) toast("error", r.error); })
-      .catch(err => toast("error", String(err)));
-  }
-});
-
-// ---------- 配对弹窗 ----------
+/* ================= 配对弹窗 ================= */
+function showPairAddressModal() {
+  const known = (S.presence || []).map(p =>
+    '<label class="pair-quick"><input type="radio" name="pq" value="' + esc(p.addr) + '"> ' +
+    esc(p.name) + '（' + esc(p.addr) + '）</label>').join("");
+  showModal("配对新设备",
+    '<p class="hint">在下方输入对方控制台显示的地址（IP:端口），或从发现的设备中选：</p>' +
+    '<input id="pair-addr" type="text" placeholder="192.168.x.x:41831" style="width:100%">' +
+    '<div class="quick-list">' + known + '</div>',
+    [
+      { text: "取消", cls: "ghost", fn: hideModal },
+      { text: "发起配对", fn: () => {
+          const addr = $("pair-addr").value.trim();
+          if (!addr) { toast("warn", "请输入地址"); return; }
+          bridge.call("pairStart", addr).then(() => {
+            showModal("配对中",
+              '<p>等待对方确认，配对码在对方屏幕上显示…</p><div class="pair-code">…</div>', []);
+          }).catch(err => toast("error", String(err)));
+        } },
+    ]);
+  // 让地址输入默认带第一个发现的设备地址
+  const first = (S.presence || [])[0];
+  if (first) $("pair-addr").value = first.addr + ":" + first.port;
+}
 function showModal(title, bodyHTML, actions) {
   $("pair-title").textContent = title;
   $("pair-body").innerHTML = bodyHTML;
@@ -443,49 +422,76 @@ function showModal(title, bodyHTML, actions) {
   $("pair-modal").classList.remove("hidden");
 }
 function hideModal() { $("pair-modal").classList.add("hidden"); }
-
 function renderPairModal(p) {
   if (p.state === "request") {
     showModal("收到配对请求",
-      `<p><b>${esc(p.message.split(" 请求配对")[0] || "对方")}</b> 想与本机配对。</p>
-       <p class="hint">请核对对方屏幕上的配对码与本机一致：</p>
-       <div class="pair-code">${esc(p.code)}</div>`,
+      '<p><b>' + esc((p.message || "").split(" 想配对")[0]) + '</b> 想与本机配对。</p>' +
+      '<p class="hint">请核对对方屏幕上的配对码与本机一致：</p>' +
+      '<div class="pair-code">' + esc(p.code) + '</div>',
       [
         { text: "拒绝", cls: "danger", fn: () => { bridge.call("pairRespond", p.reqID, false); hideModal(); } },
         { text: "确认配对码一致", fn: () => { bridge.call("pairRespond", p.reqID, true); pairWaiting(p.code); } },
       ]);
-  } else if (p.state === "code") {
-    showModal("正在配对",
-      `<p>对方屏幕上应显示相同配对码，核对后两边都点确认：</p>
-       <div class="pair-code">${esc(p.code)}</div>
-       <p class="hint">${esc(p.message || "")}</p>`,
+  } else if (p.state === "pairing") {
+    showModal("配对中",
+      '<p>对方屏幕上应显示相同配对码，核对后两边都点确认：</p>' +
+      '<div class="pair-code">' + esc(p.code) + '</div>' +
+      '<p class="hint">' + esc(p.message || "") + '</p>',
       [
         { text: "取消", cls: "danger", fn: () => { bridge.call("pairOutConfirm", false); hideModal(); } },
         { text: "确认配对", fn: () => { bridge.call("pairOutConfirm", true); pairWaiting(p.code); } },
       ]);
   } else if (p.state === "done") {
-    showModal("配对成功", `<div class="pair-code">✓</div><p>${esc(p.message || "")}</p>`,
+    showModal("配对成功", '<div class="pair-code">✓</div><p>' + esc(p.message || "") + '</p>',
       [{ text: "好", fn: hideModal }]);
   } else if (p.state === "failed") {
-    showModal("配对失败", `<p>${esc(p.message || "")}</p>`, [{ text: "关闭", cls: "danger", fn: hideModal }]);
+    showModal("配对失败", '<p>' + esc(p.message || "") + '</p>', [{ text: "关闭", cls: "danger", fn: hideModal }]);
   }
 }
 function pairWaiting(code) {
-  showModal("等待对方确认", `<p>已发送确认，等待对方点击…</p><div class="pair-code">${esc(code)}</div>`, []);
+  showModal("等待对方确认", '<p>已发送确认，等待对方点击…</p><div class="pair-code">' + esc(code) + '</div>', []);
 }
 
-// ---------- 启动 ----------
+/* ================= 服务端/宿主事件 ================= */
+bridge.on("desk:state", (s) => {
+  S = s;
+  if (!chatPeer && S.peers && S.peers.length) { chatPeer = S.peers[0].id; ensureChatLog(chatPeer); }
+  if (!selectedPeer && S.peers && S.peers.length) selectedPeer = S.peers[0].id;
+  render();
+});
+bridge.on("desk:chat", (m) => {
+  (chatLog[m.peer] = chatLog[m.peer] || []).push({
+    from: m.outgoing ? "我" : peerName(m.peer), text: m.text, ts: m.ts, outgoing: m.outgoing,
+  });
+  if (m.peer === chatPeer) renderChat();
+});
+bridge.on("desk:transfer", (t) => {
+  transfers.set(t.id, Object.assign(transfers.get(t.id) || {}, t));
+  renderTransfers();
+});
+bridge.on("desk:pair", renderPairModal);
+bridge.on("desk:control", (c) => { S.control = c; if (activeTab === "control") renderContent(); });
+bridge.on("desk:toast", (t) => toast(t.level, t.text));
+
+/* ================= 启动 ================= */
 let startupWarnShown = false;
 function maybeShowStartupWarning() {
   if (startupWarnShown || !S || !S.startupWarning) return;
   startupWarnShown = true;
   toast("warn", S.startupWarning);
 }
-(function initTab() {
-  const want = new URLSearchParams(location.search).get("tab");
-  if (want) {
-    const btn = document.querySelector('nav .tab[data-tab="' + want + '"]');
-    if (btn) btn.click();
-  }
-})();
-bridge.snapshot().then((s) => { S = s; render(); maybeShowStartupWarning(); }).catch((e) => toast("error", "初始化失败: " + e));
+document.querySelectorAll(".nav-btn[data-tab]").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".nav-btn").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".view").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  activeTab = b.dataset.tab;
+  $("view-" + activeTab).classList.add("active");
+  $("content-title").textContent = { share: "共享", transfer: "传输", control: "控制" }[activeTab];
+  renderListPanel();
+  renderContent();
+});
+bridge.snapshot().then((s) => {
+  S = s;
+  if (S.peers && S.peers.length) { chatPeer = S.peers[0].id; selectedPeer = S.peers[0].id; }
+  render();
+}).catch((e) => toast("error", "初始化失败: " + e));
