@@ -92,7 +92,7 @@ ECDH 派生，两边不一致即说明有中间人）→ 双方各点一次"确�
 用派生的 PSK 认证每次连接，会话流量全程 AES-256-GCM 加密。
 
 ```powershell
-winforgedesk.exe                    # 桌面入口：Wails 窗口 + 托盘常驻（windowsgui 无黑窗）
+winforgedesk.exe                    # 桌面入口：Wails 窗口 + 托盘常驻（windowsgui 无黑窗；托盘/键鼠为 Windows 功能）
 winforgedesk.exe --start-hidden     # 开机自启形态：只留托盘
 winforge desk                       # CLI 入口：浏览器控制台（127.0.0.1，随机令牌）
 winforge desk --no-tray             # 无头模式（自动化自测入口）
