@@ -412,7 +412,7 @@ func (h *Hub) runSessions(ctx context.Context) {
 }
 
 func (h *Hub) connectMissing() {
-	for _, p := range append([]Peer(nil), h.cfg.Peers...) {
+	for _, p := range h.cfg.PeersSnapshot() {
 		if !p.Enabled || p.PSK == "" {
 			continue
 		}

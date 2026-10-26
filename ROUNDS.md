@@ -39,6 +39,12 @@
 
 ## 轮次记录
 
+### R38 续（2026-10-27）
+- 残留 race 清零：connectMissing 的 h.cfg.Peers 直接遍历换 PeersSnapshot()
+  （R28 漏改点，-race 实测抓到）。count=2 连跑 0 race。
+- 微信风格 UI（三栏布局+绿主色+气泡聊天+传输卡片）已随 R38 前段提交，
+  /d/tools/bin 与实例已更新部署并运行，窗口 visible=True。
+
 ### R37（2026-10-27）
 - ★端到端 UI 交互首次真机验证成功：UIA 读取 wailsWindow 内部真实渲染的
   前端元素（标题/空闲状态/键鼠共享 CheckBox/三个 tab/设备文案），并真实
