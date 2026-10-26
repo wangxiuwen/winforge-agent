@@ -39,6 +39,11 @@
 
 ## 轮次记录
 
+### R19（2026-10-27）
+- 例行健康巡检：make release 重演练（R10 后核心大改过——8 产物全出含
+  winforgedesk windowsgui×2）；-race 全量绿（desk+deskapp）；冒烟通过。
+- 无代码变更轮。
+
 ### R18（2026-10-27）
 - 补 TestDialRaceConverges：R17 仲裁的直接验证——断线后双端各并发拨号两次，
   断言收敛后 3 秒 online 稳定 + 双向消息可达。count=2 与全量 -race 均通过。
