@@ -593,3 +593,45 @@ func TestMultiPeerTopology(t *testing.T) {
 			c.Snapshot()["control"].(ControlState).Role == roleIdle
 	})
 }
+
+// TestMoveCoalescingAndLatency 高频移动合帧：500 个 move 事件只发少量帧，
+// 对端最终位置精确等于最后一次积分结果；顺带测量 capture→inject 往返延迟。
+func TestMoveCoalescingAndLatency(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+	if err := a.TakeControl(peerB.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "B 进入被控态", func() bool {
+		return b.Snapshot()["control"].(ControlState).Role == roleControlled
+	})
+
+	const n = 500
+	start := time.Now()
+	for i := 0; i < n; i++ {
+		pa.sendCapture(InputEvent{Kind: InputMouseMove, MoveX: 1, MoveY: 0})
+	}
+	// 期望终点：积分 500 像素后归一化到 B 的虚拟桌面。
+	wantNX, wantNY := Normalize(VirtualPos{X: 500, Y: 0}, ScreenBounds{X: 0, Y: 0, W: 1920, H: 1080})
+	waitFor(t, 5*time.Second, "B 收到最终位置", func() bool {
+		moves := pb.inj.Moves()
+		return len(moves) > 0 && moves[len(moves)-1] == [2]uint32{wantNX, wantNY}
+	})
+	latency := time.Since(start)
+
+	moves := pb.inj.Moves()
+	t.Logf("输入合帧：500 move → %d 帧，终值精确，往返延迟 %v", len(moves), latency)
+	if len(moves) >= n {
+		t.Fatalf("合帧未生效：%d/%d 帧", len(moves), n)
+	}
+	if latency > 2*time.Second {
+		t.Fatalf("往返延迟异常: %v", latency)
+	}
+	a.ReleaseControl(-1)
+	waitFor(t, 5*time.Second, "双方回空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+}

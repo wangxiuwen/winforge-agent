@@ -174,9 +174,25 @@ func (h *Hub) onCtlDeny(s *Session) {
 	}
 }
 
-// captureLoop 捕获事件 → 转发；ctlDone 关闭或控制态丢失即退出。
+// moveFrameInterval 是鼠标移动的合帧窗口：窗口内的多次移动只发最新位置，
+// 高报点率鼠标（125-1000Hz）不会打爆网络与对端注入。
+const moveFrameInterval = 8 * time.Millisecond
+
+// captureLoop 捕获事件 → 转发；移动合帧，按键/按钮/滚轮立即发（先冲刷 pending
+// 移动保证顺序）；ctlDone 关闭或控制态丢失即退出。
 func (h *Hub) captureLoop(s *Session, ch <-chan InputEvent, done <-chan struct{}) {
 	pressed := NewPressedKeys()
+	ticker := time.NewTicker(moveFrameInterval)
+	defer ticker.Stop()
+	var nx, ny uint32
+	var dirty bool
+	flush := func() {
+		if !dirty {
+			return
+		}
+		dirty = false
+		_ = s.sendInput(InputEvent{Kind: InputMouseMove, MoveX: int32(nx), MoveY: int32(ny)})
+	}
 	for {
 		var ev InputEvent
 		var ok bool
@@ -187,6 +203,9 @@ func (h *Hub) captureLoop(s *Session, ch <-chan InputEvent, done <-chan struct{}
 			}
 		case <-done:
 			return
+		case <-ticker.C:
+			flush()
+			continue
 		}
 		h.mu.Lock()
 		active := h.ctl.Role == roleController && h.ctl.PeerID == s.peer.ID && h.integ != nil
@@ -197,15 +216,17 @@ func (h *Hub) captureLoop(s *Session, ch <-chan InputEvent, done <-chan struct{}
 		switch ev.Kind {
 		case InputMouseMove:
 			pos := h.integ.Move(ev.MoveX, ev.MoveY)
-			nx, ny := Normalize(pos, h.integ.Bounds)
+			nx, ny = Normalize(pos, h.integ.Bounds)
+			dirty = true
 			h.mu.Unlock()
-			_ = s.sendInput(InputEvent{Kind: InputMouseMove, MoveX: int32(nx), MoveY: int32(ny)})
 		case InputKey:
 			pressed.Observe(ev.VK, ev.Down)
 			h.mu.Unlock()
+			flush()
 			_ = s.sendInput(ev)
 		default:
 			h.mu.Unlock()
+			flush()
 			_ = s.sendInput(ev)
 		}
 	}

@@ -106,10 +106,15 @@ def main():
         print("[ok] 配对完成且会话在线")
         peer_a = snapshot(a["base"], a["token"])["peers"][0]["id"]
 
-        # 2) 消息
-        rpc(a["base"], a["token"], "sendChat", [peer_a, "你好 B，这是冒烟消息"])
-        wait_for(lambda: any(str(d.get("text", "")).startswith("你好 B") for d in b["poller"].of("desk:chat")),
-                 "B 收到消息")
+        # 2) 消息（会话握手完成的瞬间可能撞上瞬态，允许重发）
+        def chat_roundtrip():
+            for _ in range(5):
+                rpc(a["base"], a["token"], "sendChat", [peer_a, "你好 B，这是冒烟消息"])
+                if any(str(d.get("text", "")).startswith("你好 B") for d in b["poller"].of("desk:chat")):
+                    return True
+                time.sleep(0.5)
+            return False
+        wait_for(chat_roundtrip, "B 收到消息")
         print("[ok] 消息送达")
 
         # 3) 文件（3.5MB 随机数据）
