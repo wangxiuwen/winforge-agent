@@ -17,7 +17,7 @@ function makeBridge() {
           peerPosition: b.PeerPosition, peerToggle: b.PeerToggle, peerRemove: b.PeerRemove,
           sendChat: b.SendChat, sendFile: b.SendFile, pickAndSendFile: b.PickAndSendFile,
           transferRespond: b.TransferRespond, cancelTransfer: b.CancelTransfer,
-          chatHistory: b.ChatHistory,
+          chatHistory: b.ChatHistory, clearChat: b.ClearChat,
           takeControl: b.TakeControl, releaseControl: b.ReleaseControl,
           toggleShare: b.ToggleShare, openPath: b.OpenPath,
         };
@@ -219,6 +219,15 @@ function renderChatSelect() {
   chatPeer = next;
 }
 
+// 清空当前对话：后端删记录文件，前端清内存桶。
+function clearCurrentChat() {
+  if (!chatPeer) return;
+  if (!confirm("清空与该设备的本地聊天记录？（对端不受影响）")) return;
+  bridge.call("clearChat", chatPeer).catch(err => toast("error", String(err)));
+  delete chatLog[chatPeer];
+  renderChat();
+}
+
 // loadHistory 每个对端的历史只在首次查看时拉一次（之后走实时事件）。
 const historyLoading = Object.create(null);
 function loadHistory(peerID) {
@@ -363,6 +372,7 @@ $("file-pick").onclick = async () => {
   }).catch(err => toast("error", String(err)));
 };
 $("open-downloads").onclick = () => bridge.call("openPath", "").catch(err => toast("error", String(err)));
+$("chat-clear").onclick = clearCurrentChat;
 
 // ---------- 服务端/宿主事件 ----------
 bridge.on("desk:state", (s) => { S = s; render(); });

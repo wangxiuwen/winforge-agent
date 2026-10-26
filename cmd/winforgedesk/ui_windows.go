@@ -39,6 +39,7 @@ func (d *DeskApp) CancelTransfer(fid string)           { d.h.CancelTransfer(fid)
 func (d *DeskApp) ChatHistory(peerID string) []desk.ChatMsg {
 	return d.h.ChatHistory(peerID)
 }
+func (d *DeskApp) ClearChat(peerID string)     { d.h.DeleteChatHistory(peerID) }
 func (d *DeskApp) TakeControl(id string) error { return d.h.TakeControl(id, -1) }
 func (d *DeskApp) ReleaseControl()             { d.h.ReleaseControl(-1) }
 func (d *DeskApp) ToggleShare(on bool)         { d.h.ToggleShare(on) }
