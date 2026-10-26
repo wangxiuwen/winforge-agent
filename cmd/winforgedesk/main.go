@@ -8,9 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/wangxiuwen/winforge-agent/internal/desk"
 	"github.com/wangxiuwen/winforge-agent/internal/deskapp"
@@ -35,14 +33,14 @@ func main() {
 		os.Exit(2)
 	}
 
-	logWriter, closeLog, err := openLogFile()
-	if err != nil {
+	logWriter, closeLog, logErr := deskapp.OpenRotatingLog()
+	if logErr != nil {
 		logWriter = os.Stderr
 	} else {
 		defer closeLog()
 	}
 
-	err = deskapp.Run(deskapp.Options{
+	err := deskapp.Run(deskapp.Options{
 		ConfigPath:  *configPath,
 		UIMode:      *uiMode,
 		NoTray:      *noTray,
@@ -91,22 +89,4 @@ func runAutostart(args []string) error {
 		return fmt.Errorf("未知 autostart 动作 %q（支持 on|off|status）", action)
 	}
 	return nil
-}
-
-// openLogFile 打开滚动追加的运行日志。
-func openLogFile() (io.Writer, func(), error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return nil, nil, err
-	}
-	logDir := filepath.Join(dir, "winforge")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
-		return nil, nil, err
-	}
-	f, err := os.OpenFile(filepath.Join(logDir, "desk.log"),
-		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return nil, nil, err
-	}
-	return f, func() { _ = f.Close() }, nil
 }

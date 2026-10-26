@@ -39,6 +39,16 @@
 
 ## 轮次记录
 
+### R14（2026-10-26）
+- 托盘常驻可靠性两项加固：
+  ① desk.log 大小轮转（5MB 归档 .1），rotateWriter 带 written 计数；
+  ② 配置损坏自愈：LoadConfig 解析/校验失败 → 坏文件归档为 desk.json.bad-<pid>
+     并用默认配置启动（托盘应用"起不来"比"丢配置"更糟，坏文件保留供用户找回
+     配对记录），warning 打入日志。首次运行（文件不存在）不触发自愈。
+- deskapp 新增 logfile_test（轮转+自愈）；-race 全量绿 + 冒烟通过。
+- 设计反复：rotateWriter 包装层一度做成双接口 Logger 又简化回 io.Writer——
+  Options.LogWriter 单通道 + Run 内部 log.New 包装已够用，别为调用方预做抽象。
+
 ### R13（2026-10-26）
 - goroutine panic 防护：desk 是托盘常驻进程，任一后台协程 panic（平台 API
   异常、协议分支漏判）都会带崩整个进程。新增 recover.go（safeGo/safeCall），

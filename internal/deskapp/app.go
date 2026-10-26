@@ -55,15 +55,26 @@ func Run(opts Options) error {
 	if loggerOut == nil {
 		loggerOut = os.Stdout
 	}
+	logger := log.New(loggerOut, "[desk] ", log.LstdFlags)
 
-	cfg, err := desk.LoadConfig(cfgPath)
+	var cfg *desk.Config
+	warn, err := loadConfigWithRecovery(cfgPath, func() error {
+		c, e := desk.LoadConfig(cfgPath)
+		if e != nil {
+			return e
+		}
+		cfg = c
+		return nil
+	})
 	if err != nil {
 		return err
 	}
 	if opts.Name != "" {
 		cfg.Name = opts.Name
 	}
-	logger := log.New(loggerOut, "[desk] ", log.LstdFlags)
+	if warn != "" {
+		logger.Printf("[warn] %s", warn)
+	}
 	logger.Printf("WinForge Desk 启动：名称=%s ID=%s 配置=%s", cfg.Name, cfg.ID, cfgPath)
 
 	platform := *desk.NewPlatform(cfg.Hotkey, logger)
