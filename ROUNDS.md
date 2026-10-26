@@ -17,9 +17,9 @@
 - [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
 - [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
 - [x] R5 传输增强：取消（收发双侧+UI 按钮+对端联动）、接收进度 200ms 限频、32MB 冒烟实测（1GB 靠同一机制，未单独实测）
-- [ ] R2+ UI 打磨：拖拽文件发送、聊天记录持久化（会话级）、多对端消息隔离、连接状态动效
+- [ ] R2+ UI 打磨：聊天记录持久化（会话级）、连接状态动效（拖拽发送与多对端消息隔离已完成→R6）
 - [ ] R2+ 控制体验：控制时对端屏幕边缘提示条、光标进入动画（Esc 快捷交还已完成→见 R5）
-- [ ] R2+ 多对端拓扑（>2 台）：方位矩阵、链式切换
+- [ ] R2+ 多对端拓扑（>2 台）：链式切换（方位互斥与控制互斥已由 TestMultiPeerTopology 覆盖→R6）
 - [ ] R2+ 性能：输入延迟测量（目标 <30ms 局域网）、移动事件合帧
 - [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
 - [ ] R2+ 文档：README 截图位、SECURITY.md 补 desk 章节 threat model
@@ -38,6 +38,22 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R6（2026-10-26）
+- ★结构性修复：dialSession 末尾同步调用 s.serve()（永不返回的读循环），把
+  runSessions 补连循环永久卡死——多对端场景下每个 Hub 只能有第一条主动拨号会话，
+  后续对端永远拨不出去。此前单对场景全部"恰好"靠它活着。修复：拨号侧会话
+  `go s.serve()`（accept 侧本就运行在自己的 accept 协程里，不受影响）。
+- 多对端拓扑 e2e TestMultiPeerTopology：三 Hub 全互联（A↔B、A↔C），方位设置、
+  控制互斥（A 控制 B 时 C 的 take 被 deny）、交还后换向控制，全断言通过。
+  pairTwo 泛化为按对端 ID 等待（支持同一 Hub 已有其他配对）。
+- 拖拽文件发送：浏览器形态 HTML5 拖放（全屏提示层 + dataTransfer.files 上传）；
+  Wails 形态升级 wails v2.5.0→v2.17.0 启用 DragAndDrop+OnFileDrop（v2.5 无此 API），
+  Go 侧收路径事件交前端按当前选中对端 SendFile。
+- 多对端消息隔离：chatLog 改按 peerID 分桶，切换下拉只看当前对端（每桶 500 条上限）。
+- 补交 R5 漏提交的 internal/desk/input_windows.go（Esc 的平台层部分——R5 提交后
+  HEAD 上 Esc 实际是死功能，本轮修复；教训：提交前 git status 全量核对清单内文件）。
+- -race 全量绿 + 冒烟（32MB）通过。
 
 ### R5（2026-10-26）
 - 传输取消全链路：Hub.CancelTransfer（发送侧 CAS 抢取消权后同步清理——offer 阶段

@@ -332,7 +332,6 @@ func (h *Hub) registerSession(s *Session) {
 
 // sessionClosed 会话结束：清理传输状态与控制状态。
 func (h *Hub) sessionClosed(s *Session) {
-	h.log.Printf("[dbg] 会话关闭 %s", s.peer.ID)
 	h.mu.Lock()
 	if h.sessions[s.peer.ID] == s {
 		delete(h.sessions, s.peer.ID)
@@ -423,7 +422,9 @@ func (h *Hub) dialSession(p Peer, addr string) {
 	}
 	h.mu.Unlock()
 	h.registerSession(s)
-	s.serve()
+	// serve 是永不返回的读循环，必须在独立 goroutine 里跑，
+	// 否则 runSessions 的补连循环会被第一条会话永久卡死（多对端拨号失效）。
+	go s.serve()
 }
 
 // controllingPeerID 返回当前控制状态涉及的对端（供 state 消息）。

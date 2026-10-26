@@ -125,3 +125,10 @@ select, input[type=text], #chat-text, #file-path {
 .toast.error { border-left-color: var(--err); }
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } }
 .hidden { display: none !important; }
+#drop-hint {
+  position: fixed; inset: 0; z-index: 80; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(16, 20, 26, .82); border: 2px dashed var(--accent);
+  font-size: 20px; color: var(--accent); pointer-events: none;
+}
+#drop-hint.on { display: flex; }

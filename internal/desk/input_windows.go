@@ -166,6 +166,7 @@ type windowsInput struct {
 	injButtons map[MouseButton]bool
 
 	hotkeyCh chan struct{}
+	escapeCh chan struct{}
 }
 
 type edgeHit struct {
@@ -177,6 +178,7 @@ type edgeHit struct {
 func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 	wi := &windowsInput{
 		hotkeyCh:   make(chan struct{}, 1),
+		escapeCh:   make(chan struct{}, 1),
 		injKeys:    map[uint32]uint32{},
 		injButtons: map[MouseButton]bool{},
 	}
@@ -194,6 +196,7 @@ func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 		},
 		WatchEdges: wi.watchEdges,
 		Hotkey:     wi.hotkeyCh,
+		Escape:     wi.escapeCh,
 		ScreenBounds: func() ScreenBounds {
 			return wi.screenBounds()
 		},
@@ -266,6 +269,14 @@ func (w *windowsInput) keyboardProc(nCode int, wparam, lparam uintptr) uintptr {
 	if nCode >= 0 {
 		kb := (*kbdllhookstruct)(unsafe.Pointer(lparam))
 		if kb.Flags&llkhfInjected == 0 {
+			// 非捕获模式：被控端物理 Esc 快捷交还。
+			if w.mode.Load() != 1 && kb.VkCode == 0x1B &&
+				(wparam == uintptr(wmKeyDown) || wparam == uintptr(wmSysKeyDown)) {
+				select {
+				case w.escapeCh <- struct{}{}:
+				default:
+				}
+			}
 			if w.mode.Load() == 1 {
 				down := wparam == uintptr(wmKeyDown) || wparam == uintptr(wmSysKeyDown)
 				ev := InputEvent{Kind: InputKey, VK: kb.VkCode, Scan: kb.ScanCode,

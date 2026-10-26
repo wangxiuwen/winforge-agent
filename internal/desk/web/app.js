@@ -75,7 +75,7 @@ const bridge = makeBridge();
 // ---------- 状态 ----------
 let S = { peers: [], presence: [], control: { role: 0 } };
 let chatPeer = "";
-const chatLog = []; // {from, text, ts, outgoing}
+const chatLog = Object.create(null); // peerID -> [{from, text, ts, outgoing}]，多对端互相隔离
 
 const $ = (id) => document.getElementById(id);
 function esc(s) {
@@ -207,7 +207,8 @@ function renderChatSelect() {
 
 function renderChat() {
   const box = $("chat-log");
-  box.innerHTML = chatLog.map(m =>
+  const list = chatLog[chatPeer] || [];
+  box.innerHTML = list.map(m =>
     `<div class="msg ${m.outgoing ? "out" : ""}"><div class="who">${esc(m.from)} · ${fmtTime(m.ts)}</div>${esc(m.text)}</div>`
   ).join("");
   box.scrollTop = box.scrollHeight;
@@ -300,7 +301,12 @@ $("open-downloads").onclick = () => bridge.call("openPath", "").catch(err => toa
 // ---------- 服务端/宿主事件 ----------
 bridge.on("desk:state", (s) => { S = s; render(); });
 bridge.on("desk:toast", (t) => toast(t.level, t.text));
-bridge.on("desk:chat", (m) => { chatLog.push(m); if (chatLog.length > 500) chatLog.shift(); renderChat(); });
+bridge.on("desk:chat", (m) => {
+  const list = (chatLog[m.peer] ||= []);
+  list.push(m);
+  if (list.length > 500) list.shift();
+  if (m.peer === chatPeer) renderChat();
+});
 bridge.on("desk:transfer", (t) => {
   const cur = transfers.get(t.id) || {};
   transfers.set(t.id, Object.assign(cur, t));
@@ -308,6 +314,42 @@ bridge.on("desk:transfer", (t) => {
 });
 bridge.on("desk:pair", (p) => renderPairModal(p));
 bridge.on("desk:control", (c) => { if (S) { S.control = c; render(); } });
+
+// ---------- 拖拽发送 ----------
+const dropHint = document.createElement("div");
+dropHint.id = "drop-hint";
+dropHint.textContent = "松手发送给选中的设备";
+document.body.appendChild(dropHint);
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  dragDepth++;
+  dropHint.classList.add("on");
+});
+window.addEventListener("dragleave", () => {
+  if (--dragDepth <= 0) { dragDepth = 0; dropHint.classList.remove("on"); }
+});
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  dropHint.classList.remove("on");
+  if (bridge.mode !== "http" || !chatPeer) return;
+  for (const f of e.dataTransfer.files) {
+    bridge.upload(f, chatPeer).then(r => {
+      if (r && r.error) toast("error", r.error);
+    }).catch(err => toast("error", String(err)));
+  }
+});
+// Wails 拖放走 Go 侧路径事件。
+bridge.on("desk:filedrop", (paths) => {
+  if (!Array.isArray(paths) || !chatPeer) return;
+  for (const p of paths) {
+    bridge.call("sendFile", chatPeer, p)
+      .then(r => { if (r && r.error) toast("error", r.error); })
+      .catch(err => toast("error", String(err)));
+  }
+});
 
 // ---------- 配对弹窗 ----------
 function showModal(title, bodyHTML, actions) {

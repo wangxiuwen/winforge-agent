@@ -171,19 +171,36 @@ func pairTwo(t *testing.T, a, b *Hub) {
 	}
 	b.PairRespond(reqID, true)
 	a.PairConfirmOut(true)
+	// 按 ID 等待（允许同一 Hub 已有其他配对）。
+	idOf := func(h *Hub) string { return h.Snapshot()["self"].(map[string]interface{})["id"].(string) }
+	aTarget, bTarget := idOf(b), idOf(a)
+	onlineOf := func(h *Hub, id string) bool {
+		for _, p := range peerViews(h) {
+			if p.ID == id {
+				return p.Online
+			}
+		}
+		return false
+	}
 	waitFor(t, 5*time.Second, "A 保存对端", func() bool {
-		return len(peerViews(a)) == 1
+		for _, p := range peerViews(a) {
+			if p.ID == aTarget {
+				return true
+			}
+		}
+		return false
 	})
 	waitFor(t, 5*time.Second, "B 保存对端", func() bool {
-		return len(peerViews(b)) == 1
+		for _, p := range peerViews(b) {
+			if p.ID == bTarget {
+				return true
+			}
+		}
+		return false
 	})
 	// 等会话真正建立。
-	waitFor(t, 8*time.Second, "A 侧会话在线", func() bool {
-		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
-	})
-	waitFor(t, 8*time.Second, "B 侧会话在线", func() bool {
-		return len(peerViews(b)) == 1 && peerViews(b)[0].Online
-	})
+	waitFor(t, 8*time.Second, "A 侧会话在线", func() bool { return onlineOf(a, aTarget) })
+	waitFor(t, 8*time.Second, "B 侧会话在线", func() bool { return onlineOf(b, bTarget) })
 }
 
 func peerViews(h *Hub) []PeerView {
@@ -501,4 +518,78 @@ func TestEscapeReleasesControl(t *testing.T) {
 	if pb.inj.Released() == 0 {
 		t.Fatal("交还时应释放按键")
 	}
+}
+
+// TestMultiPeerTopology 三台拓扑：A 同时配对 B(右) 与 C(左)。
+// 控制互斥（控制 B 时 C 拿不到 A）、交还后可换向控制。
+func TestMultiPeerTopology(t *testing.T) {
+	pa, pb, pc := newFakePlatform(), newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	c, _ := newTestHub(t, "主机C", pc)
+	pairTwo(t, a, b)
+	pairTwo(t, a, c)
+
+	idOf := func(h *Hub) string { return h.Snapshot()["self"].(map[string]interface{})["id"].(string) }
+	bID, cID := idOf(b), idOf(c)
+	peerOf := func(h *Hub, id string) string {
+		for _, p := range peerViews(h) {
+			if p.ID == id {
+				return p.ID
+			}
+		}
+		return ""
+	}
+	if peerOf(a, bID) == "" || peerOf(a, cID) == "" {
+		t.Fatal("A 应同时配对 B 和 C")
+	}
+	// 方位：B 在 A 右侧、C 在 A 左侧；反过来 A 在 B 左、在 C 右。
+	if err := a.PeerPosition(bID, "right"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.PeerPosition(cID, "left"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PeerPosition(idOf(a), "left"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.PeerPosition(idOf(a), "right"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A 控制 B：B 被控。
+	if err := a.TakeControl(bID, 0.4); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "B 进入被控态", func() bool {
+		return b.Snapshot()["control"].(ControlState).Role == roleControlled
+	})
+	// 控制互斥：此刻 C 想控制 A 应被拒（A 正忙于控制 B）。
+	if err := c.TakeControl(idOf(a), 0.5); err == nil {
+		waitFor(t, 5*time.Second, "C 的请求被拒、C 回空闲", func() bool {
+			return c.Snapshot()["control"].(ControlState).Role == roleIdle
+		})
+	}
+	waitFor(t, 5*time.Second, "A 仍处于控制态", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleController
+	})
+	// B 交还。
+	b.ReleaseControl(-1)
+	waitFor(t, 5*time.Second, "A/B 回到空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle &&
+			b.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+	// 换向：A 控制 C。
+	if err := a.TakeControl(cID, 0.4); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "C 进入被控态", func() bool {
+		return c.Snapshot()["control"].(ControlState).Role == roleControlled
+	})
+	a.ReleaseControl(-1)
+	waitFor(t, 5*time.Second, "全部回到空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle &&
+			b.Snapshot()["control"].(ControlState).Role == roleIdle &&
+			c.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
 }

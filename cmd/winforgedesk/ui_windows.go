@@ -35,7 +35,7 @@ func (d *DeskApp) PeerRemove(id string) error          { return d.h.PeerRemove(i
 func (d *DeskApp) SendChat(id, text string) error      { return d.h.SendChat(id, text) }
 func (d *DeskApp) SendFile(id, path string) error      { return d.h.SendFile(id, path) }
 func (d *DeskApp) TransferRespond(fid string, ok bool) { d.h.TransferRespond(fid, ok) }
-func (d *DeskApp) CancelTransfer(fid string)          { d.h.CancelTransfer(fid) }
+func (d *DeskApp) CancelTransfer(fid string)           { d.h.CancelTransfer(fid) }
 func (d *DeskApp) TakeControl(id string) error         { return d.h.TakeControl(id, -1) }
 func (d *DeskApp) ReleaseControl()                     { d.h.ReleaseControl(-1) }
 func (d *DeskApp) ToggleShare(on bool)                 { d.h.ToggleShare(on) }
@@ -75,9 +75,18 @@ func runWindowUI(h *desk.Hub, startHidden bool) error {
 		AssetServer: &assetserver.Options{
 			Assets: desk.WebFS(),
 		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: false,
+			CSSDropProperty:    "--wails-drop-target",
+		},
 		OnStartup: func(ctx context.Context) {
 			deskWailsCtx = ctx
 			h.AddEmitter(deskWailsEmitter{})
+			// 拖放文件 → 交给前端按当前选中的对端发送。
+			wruntime.OnFileDrop(ctx, func(_ int, _ int, paths []string) {
+				wruntime.EventsEmit(ctx, "desk:filedrop", paths)
+			})
 		},
 		OnBeforeClose: func(ctx context.Context) bool {
 			// 点关闭只隐藏，托盘常驻；退出走托盘菜单。
