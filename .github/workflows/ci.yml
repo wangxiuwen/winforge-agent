@@ -7,7 +7,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -19,7 +19,17 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Test
-        run: go test -race ./... > test.log 2>&1 || { cat test.log >> "${GITHUB_STEP_SUMMARY}"; cat test.log; exit 1; }
+        run: go test -race ./... > test.log 2>&1 || { cat test.log; exit 1; }
+      - name: Publish test log
+        if: failure()
+        run: |
+          git config user.email ci@winforge.local
+          git config user.name ci-bot
+          git checkout --orphan ci-log
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          git add test.log
+          git commit -m "test log for $GITHUB_SHA"
+          git push -f origin ci-log
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
