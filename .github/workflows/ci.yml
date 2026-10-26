@@ -18,6 +18,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Web JS syntax check
+        run: node --check internal/desk/web/app.js
       - name: Test
         run: |
           go test -race ./... > test.log 2>&1 || {

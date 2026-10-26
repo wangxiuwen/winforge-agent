@@ -31,7 +31,9 @@
 1. 开工先 `git log --oneline -3` + `git status`：确认在 `desk` 分支、无别人未提交改动；
    发现有未提交的别人改动 → 只提交自己改的文件，绝不 `git add -A` 吸收。
 2. 每轮只做清单里 1-2 项，做完必须：`go build ./...` + `go test ./internal/desk/ -count=1 -timeout 180s`
-   （涉改共享代码再跑 `go test ./...`）+ 冒烟 `py -3 smoke_desk.py`（涉及传输/协议时）。
+   （涉改共享代码再跑 `go test ./...`）+ 冒烟 `py -3 smoke_desk.py`（涉及传输/协议时）；
+   改了 web 前端必须 `node --check internal/desk/web/app.js`（R42 的 P0 教训：
+   重复 let 声明=整份 JS 解析失败，UI 全死，go 门禁和 HTTP 冒烟都测不到）。
 3. 本机 vet 对 input_windows.go 的 unsafe.Pointer 告警是 Win32 钩子惯用写法，CI(Linux) 不编译该文件，忽略。
 4. `internal/agent` 存量测试在 Windows 本地失败（与 desk 无关，CI Linux 通过为准），不要顺手去修范围外代码。
 5. GOPROXY 必须设 `https://mirrors.aliyun.com/goproxy/,direct`（本机 goproxy.cn DNS 不通，7897 代理不常开）。
@@ -40,6 +42,26 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R42（2026-10-27）★P0
+- **P0 修复：已提交的 app.js 整份解析失败**——顶层重复 `let startupWarnShown`
+  （第 80/477 行，重复 let = SyntaxError，控制台 JS 全死）。R37 UIA 验证发生在
+  重复引入之前，R39 把坏工作区原样提交；门禁全没拦住：go 门禁只嵌不执行 JS，
+  冒烟走 HTTP API 不过 JS。修复=删重复声明。
+- **新门禁**：CI 加 `node --check internal/desk/web/app.js`（ubuntu runner 自带
+  node）；每轮规则第 2 条同步加"改 web 前端必须 node --check"。
+- app.js 顺手补 `?tab=` 深链（switchTab 抽函数，老 UI 有新 UI 丢了），
+  screenshot_desk.py 的 `&tab=share/transfer` 重新可用。
+- README 两张截图用微信风新 UI 重生成（R11 时代老 UI 截图已过时）：
+  共享 tab（三栏+设备卡）与传输 tab（气泡聊天+文件面板）均真实渲染。
+  截图过程本身=浏览器宿主端到端验证（配对+消息+5MB 传输真实跑通）。
+- 桌面端重部署：D:\tools\bin\winforgedesk.exe 带 desktop,production tags 重建、
+  重启实例，UIA 实读窗口内真实元素（共享/传输/控制/＋配对/键鼠共享）——
+  两个宿主的 JS 存活都实测确认。
+- 已知小缺口（留后续轮）：传输卡片只由实时事件填充，snapshot 不含传输历史，
+  刷新后"暂无传输任务"；要保留历史需 Go 侧存最近传输列表（动共享代码）。
+- 教训：**"UI 长得对"和"JS 活着"是两件事**——窗口 visible/元素存在不证明
+  脚本没崩；前端产物没有语法门禁时，一次重复声明就能全灭且无人察觉。
 
 ### R41（2026-10-27）
 - ★修发布清单缺口：Makefile SHA256SUMS 用 `shasum -a 256 winforge-*`，glob

@@ -474,22 +474,24 @@ bridge.on("desk:control", (c) => { S.control = c; if (activeTab === "control") r
 bridge.on("desk:toast", (t) => toast(t.level, t.text));
 
 /* ================= 启动 ================= */
-let startupWarnShown = false;
 function maybeShowStartupWarning() {
   if (startupWarnShown || !S || !S.startupWarning) return;
   startupWarnShown = true;
   toast("warn", S.startupWarning);
 }
-document.querySelectorAll(".nav-btn[data-tab]").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".nav-btn").forEach(x => x.classList.remove("active"));
+function switchTab(tab) {
+  if (!document.getElementById("view-" + tab)) return;
+  document.querySelectorAll(".nav-btn").forEach(x => x.classList.toggle("active", x.dataset.tab === tab));
   document.querySelectorAll(".view").forEach(x => x.classList.remove("active"));
-  b.classList.add("active");
-  activeTab = b.dataset.tab;
-  $("view-" + activeTab).classList.add("active");
-  $("content-title").textContent = { share: "共享", transfer: "传输", control: "控制" }[activeTab];
+  activeTab = tab;
+  $("view-" + tab).classList.add("active");
+  $("content-title").textContent = { share: "共享", transfer: "传输", control: "控制" }[tab] || "共享";
   renderListPanel();
   renderContent();
-});
+}
+document.querySelectorAll(".nav-btn[data-tab]").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+const deepTab = new URLSearchParams(location.search).get("tab");
+if (deepTab && deepTab !== "share") switchTab(deepTab);
 bridge.snapshot().then((s) => {
   S = s;
   if (S.peers && S.peers.length) { chatPeer = S.peers[0].id; selectedPeer = S.peers[0].id; }
