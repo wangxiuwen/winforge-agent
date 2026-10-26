@@ -252,18 +252,47 @@ function renderChat() {
 }
 
 const transfers = new Map(); // id -> view
+// 速率估算：基于最近两次 progress 事件的字节差/时间差（EMA 平滑）。
+const transferRate = new Map(); // id -> {lastRecv, lastAt, ema}
+function updateRate(id, t) {
+  if (t.state !== "receiving" && t.state !== "sending") {
+    transferRate.delete(id);
+    return 0;
+  }
+  const now = performance.now();
+  const prev = transferRate.get(id);
+  if (!prev) {
+    transferRate.set(id, { lastRecv: t.recv || 0, lastAt: now, ema: 0 });
+    return 0;
+  }
+  const dt = (now - prev.lastAt) / 1000;
+  const dBytes = (t.recv || 0) - prev.lastRecv;
+  let rate = 0;
+  if (dt > 0.05 && dBytes > 0) rate = dBytes / dt;
+  const ema = prev.ema ? prev.ema * 0.7 + rate * 0.3 : rate;
+  transferRate.set(id, { lastRecv: t.recv || 0, lastAt: now, ema });
+  return ema;
+}
+function fmtRate(bps) {
+  if (bps > 1 << 20) return (bps / (1 << 20)).toFixed(1) + " MB/s";
+  if (bps > 1024) return (bps / 1024).toFixed(0) + " KB/s";
+  return bps.toFixed(0) + " B/s";
+}
 function renderTransfers() {
   const box = $("transfer-list");
   box.innerHTML = "";
   for (const [id, t] of transfers) {
     const pct = t.size ? Math.min(100, Math.round((t.recv || 0) * 100 / t.size)) : 0;
+    const rate = updateRate(id, t);
+    const rateText = (t.state === "receiving" || t.state === "sending") && rate > 0
+      ? " · " + fmtRate(rate) : "";
     const el = document.createElement("div");
     el.className = "tr-item";
     const stateText = { offer: "等待你确认", accepted: "已接受", receiving: "接收中", sending: "发送中",
       sent: "已发出", done: "已完成", failed: "失败", rejected: "被拒收", cancelled: "已取消" }[t.state] || t.state;
     el.innerHTML = `<div class="row">
         <span class="name">${t.dir === "in" ? "↓ " : "↑ "}${esc(t.name || "")}</span>
-        <span class="grow"></span><span class="state ${t.state}">${stateText} ${t.size ? fmtSize(t.recv || 0) + "/" + fmtSize(t.size) : ""}</span>
+        <span class="grow"></span><span class="state ${t.state}">${stateText} ${t.size ? fmtSize(t.recv || 0) + "/" + fmtSize(t.size) : ""}${rateText}</span>
       </div>
       <div class="bar"><div style="width:${pct}%"></div></div>
       <div class="row" style="margin-top:6px">
