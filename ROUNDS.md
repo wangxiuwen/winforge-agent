@@ -39,6 +39,18 @@
 
 ## 轮次记录
 
+### R23（2026-10-27）
+- **CI 真相确认**：test 步已过（R21 race 修复在 CI 生效），CI 红的原因 =
+  govulncheck 报 x/net@v0.56.0 的 5 条 HTTP/2 公告（GO-2026-6617/6612/6611/6610/6603，
+  修复版 v0.60.0）——CI 的漏洞库比 R10 本地扫描时新。
+- 修复：x/net 升级 v0.56.0→v0.60.0（连带 x/sys/x/text），-race 全量绿 + 冒烟通过。
+- TestDialRaceConverges 断言修正：删"3 秒零闪烁"强断言（收敛过程的闪烁是
+  仲裁设计允许的瞬态，套件环境必闪），只断言收敛终点在线 + 双向消息通。
+- 诊断通道演进：::error:: annotations 通道打通（check-runs API 匿名可读，
+  annotations_count 11 条）——CI 失败细节今后可经此通道读取。
+- 待 CI 复验：push 7d64611 起的 run 应转绿（若 govulncheck 又报新公告，
+  按公告修对应依赖版本）。
+
 ### R22（2026-10-27）
 - CI 排查继续但遭遇通道墙：contents API 404（匿名限流伪装）、raw CDN 缓存、
   step summary 匿名不回显。**已知确定事实**：CI 在 ubuntu 的 test 步失败；
