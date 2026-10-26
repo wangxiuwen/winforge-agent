@@ -436,4 +436,11 @@ function pairWaiting(code) {
 }
 
 // ---------- 启动 ----------
+(function initTab() {
+  const want = new URLSearchParams(location.search).get("tab");
+  if (want) {
+    const btn = document.querySelector('nav .tab[data-tab="' + want + '"]');
+    if (btn) btn.click();
+  }
+})();
 bridge.snapshot().then((s) => { S = s; render(); }).catch((e) => toast("error", "初始化失败: " + e));

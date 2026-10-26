@@ -77,12 +77,20 @@ type uiServer struct {
 }
 
 // StartBrowserUI 启动 HTTP 控制台并把事件总线接到 Hub。
+// 端口被占（强杀后的 TIME_WAIT 等）自动顺延，最多试 10 个。
 // 返回实际地址（127.0.0.1:端口）。
 func StartBrowserUI(h *Hub, port int) (string, error) {
 	bus := newUIBus()
 	s := &uiServer{hub: h, bus: bus, mux: http.NewServeMux()}
 	h.AddEmitter(bus)
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	var ln net.Listener
+	var err error
+	for try := 0; try < 10; try++ {
+		ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port+try))
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return "", err
 	}

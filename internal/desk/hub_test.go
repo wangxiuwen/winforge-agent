@@ -870,3 +870,29 @@ func aChatCfgPath(h *Hub) string {
 	defer h.mu.Unlock()
 	return h.cfgPath
 }
+
+// TestChatBidirectional 双向聊天（B→A 方向回归）。
+func TestChatBidirectional(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerA := peerViews(b)[0]
+	if err := b.SendChat(peerA.ID, "反向消息"); err != nil {
+		t.Fatalf("B→A 发送: %v", err)
+	}
+	waitFor(t, 5*time.Second, "A 收到反向消息", func() bool {
+		for _, ev := range emitterOf(a).all() {
+			if m, ok := ev.data.(map[string]interface{}); ok && m["text"] == "反向消息" {
+				return true
+			}
+		}
+		return false
+	})
+	if len(b.ChatHistory(peerA.ID)) != 1 {
+		t.Fatal("B 端历史缺失")
+	}
+	if len(a.ChatHistory(peerViewsBID(b))) != 1 {
+		t.Fatal("A 端历史缺失")
+	}
+}

@@ -22,7 +22,7 @@
 - [x] R9 多对端拓扑：链式切换（被控端推向另一侧方位边 → ctl_chain → 控制器改链目标）
 - [x] R7 性能：移动事件 8ms 合帧（500→1 帧实测）+ capture→inject 往返延迟测量（本机 loopback ~50ms；真实局域网延迟待真机）
 - [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
-- [ ] R2+ 文档：README 截图位、SECURITY.md 补 desk 章节 threat model
+- [x] R11 文档：README 真实控制台截图（无头 Chrome 自动生成）；SECURITY.md desk 章节见 R7
 
 ## 每轮规则（给迭代轮）
 
@@ -38,6 +38,18 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R11（2026-10-26）
+- README 真实截图：screenshot_desk.py 起双实例→配对→双向聊天→5MB 文件传输完成→
+  无头 Chrome(--virtual-time-budget) 截控制台共享页与传输页，入 docs/ 并嵌 README。
+- 前端支持 ?tab=share|transfer 直达页签（截图与用户书签都受益）。
+- 产品加固：浏览器控制台端口被占（强杀后 TIME_WAIT）自动顺延最多 10 个——
+  截图流程反复强杀重启时暴露的实际痛点。
+- 补 TestChatBidirectional（B→A 方向此前无覆盖）。
+- 排查插曲：截图缺对方消息→先后怀疑 recordChat/历史拉取/会话死亡，最终定位是
+  **验证脚本把 A 视角的 peer ID 用在了 B 的 sendChat 上**（产品无 bug）。
+  教训：脚本里两端互相操作时，peer ID 必须从对端自己的视角取。
+- -race 全量绿（一次偶发失败复跑即绿）+ 冒烟通过。
 
 ### R10（2026-10-26）
 - 回归加固轮（功能清单已清空）。
