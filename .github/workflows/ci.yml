@@ -21,18 +21,22 @@ jobs:
       - name: Test
         run: |
           go test -race ./... > test.log 2>&1 || {
-            grep -E '^(--- FAIL|FAIL|panic|WARNING: DATA RACE)' test.log | sed 's/^/::error::CI-DIAG /' | head -40
-            cat test.log
+            echo "::error::TEST-FAILED exit=$?"
+            sed -n '1,25p' test.log | sed 's/^/::error::HEAD /'
+            grep -E 'FAIL|panic|DATA RACE|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -30
+            tail -25 test.log | sed 's/^/::error::TAIL /'
             exit 1
           }
       - name: Publish test log
         if: failure()
+        continue-on-error: true
         run: |
           B64=$(base64 -w0 test.log)
           SHA=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log" | grep -o '"sha":"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{40\}')
           PAYLOAD="{\"message\":\"test log $GITHUB_SHA\",\"content\":\"$B64\",\"branch\":\"ci-log\""
           if [ -n "$SHA" ]; then PAYLOAD="{\"message\":\"update\",\"content\":\"$B64\",\"branch\":\"ci-log\",\"sha\":\"$SHA\"}"; fi
-          curl -s -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD"
+          HTTP=$(curl -s -o /tmp/put.json -w "%{http_code}" -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD")
+          echo "::error::PUBLISH-HTTP $HTTP"
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
