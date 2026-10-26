@@ -19,7 +19,12 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Test
-        run: go test -race ./... > test.log 2>&1 || { cat test.log; exit 1; }
+        run: |
+          go test -race ./... > test.log 2>&1 || {
+            grep -E '^(--- FAIL|FAIL|panic|WARNING: DATA RACE)' test.log | sed 's/^/::error::CI-DIAG /' | head -40
+            cat test.log
+            exit 1
+          }
       - name: Publish test log
         if: failure()
         run: |
