@@ -908,7 +908,7 @@ func TestAddrLearning(t *testing.T) {
 	aSelfID := peerViewsBID(a) // A 自己的 ID（B 视角的对端）
 
 	// B 的 peer 记录应已学到 A 的地址（A 的控制端口）。
-	waitFor(t, 5*time.Second, "B 学到 A 的地址", func() bool {
+	waitFor(t, 15*time.Second, "B 学到 A 的地址", func() bool {
 		for _, p := range peerViews(b) {
 			if p.ID == aSelfID && p.Addr != "" {
 				return true

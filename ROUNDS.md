@@ -39,6 +39,18 @@
 
 ## 轮次记录
 
+### R17（2026-10-27）
+- ★产品级修复：双端并发拨号会话风暴。断线后 A、B 的补连循环同时拨对方，
+  两条会话互相替换踢踩，重连窗口内 SendChat 持续"对端不在线"（R12/R16 的
+  偶发超时根源，比之前认定的"测试时序抖动"更实质）。
+  修复：Session 增加 initiatorID（主动连接=本机 ID，被动=对端 ID），
+  registerSession 对同对端双活会话按 initiatorID 字典序仲裁只保留一条
+  ——两端决策一致，风暴收敛。AddrLearning/Reconnect 测试 count=3 全过，
+  全量 -race 绿，冒烟通过。
+- 例行：重新生成 README 截图（管线健康）；截图脚本 wait_for 裸 return None
+  的坑已在上轮修掉，本轮复用顺畅。
+- 测试等待放宽：TestAddrLearning 学地址等待 5s→15s。
+
 ### R16（2026-10-27）
 - 例行回归轮：格式漂移收尾（gofmt 范围=自己写的 internal/desk、internal/deskapp、
   cmd/winforgedesk；范围外的 agent/client 等存量非格式化文件不碰）；

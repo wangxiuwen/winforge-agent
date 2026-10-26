@@ -112,6 +112,9 @@ type Session struct {
 	peer      Peer
 	conn      net.Conn
 	keys      *sessionKeys
+	// initiatorID 是拨号方的 ID：主动连接=本机 ID，被动接受=对端 ID。
+	// 双端并发拨号时用它做唯一性仲裁（保留 initiatorID 较小者）。
+	initiatorID string
 	sendMu    sync.Mutex
 	peerName  string
 	peerShare bool
@@ -298,10 +301,24 @@ func (s *Session) serve() {
 		s.hub.sessionClosed(s)
 	}()
 	go s.keepalive()
-	share := s.hub.cfg.ShareEnabled
-	name := s.hub.cfg.Name
-	_ = s.sendJSON(wireMsg{T: msgState, Name: name, ShareEnabled: &share,
-		Controlling: s.hub.controllingPeerID(), Port: s.hub.ControlPort()})
+	sendState := func() {
+		share := s.hub.cfg.ShareEnabled
+		_ = s.sendJSON(wireMsg{T: msgState, Name: s.hub.cfg.Name, ShareEnabled: &share,
+			Controlling: s.hub.controllingPeerID(), Port: s.hub.ControlPort()})
+	}
+	sendState()
+	// 首条 state 与对端握手收尾存在竞态窗口，3s 后重发一次让对端的
+	// 地址学习/共享状态同步更可靠（幂等消息，重复无害）。
+	safeGo(s.hub.log, "state-resend", func() {
+		select {
+		case <-s.done:
+			return
+		case <-time.After(3 * time.Second):
+		}
+		if s.Alive() {
+			sendState()
+		}
+	})
 	for {
 		_ = s.conn.SetReadDeadline(time.Now().Add(dropAfter))
 		typ, sealed, err := readFrame(s.conn)

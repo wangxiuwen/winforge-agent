@@ -327,7 +327,7 @@ func (h *Hub) acceptSession(conn net.Conn, hello pairFrame) {
 		return
 	}
 	// 把已读出的 hello 交给 Session。
-	s := &Session{hub: h, peer: peer, conn: conn, done: make(chan struct{})}
+	s := &Session{hub: h, peer: peer, conn: conn, done: make(chan struct{}), initiatorID: hello.ID}
 	// 复制一份握手：hello 已消费，这里改走专用流程。
 	if err := s.handshakeFrom(hello, psk); err != nil {
 		h.log.Printf("来自 %s 的会话握手失败: %v", hello.ID, err)
@@ -340,10 +340,18 @@ func (h *Hub) acceptSession(conn net.Conn, hello pairFrame) {
 	safeGo(h.log, "session-serve", s.serve)
 }
 
-// registerSession 登记会话（同一对端只保留最新一条）。
+// registerSession 登记会话。双端并发拨号会产生同对端的两条会话，
+// 以 initiatorID 字典序仲裁只保留一条（两端决策一致），否则互相踢导致重连风暴。
 func (h *Hub) registerSession(s *Session) {
 	h.mu.Lock()
-	if old := h.sessions[s.peer.ID]; old != nil {
+	old := h.sessions[s.peer.ID]
+	if old != nil && old.Alive() {
+		if old.initiatorID <= s.initiatorID {
+			// 保留旧会话，新会话自行退场。
+			h.mu.Unlock()
+			s.close()
+			return
+		}
 		old.close()
 	}
 	h.sessions[s.peer.ID] = s
@@ -428,7 +436,7 @@ func (h *Hub) dialSession(p Peer, addr string) {
 		_ = conn.Close()
 		return
 	}
-	s := &Session{hub: h, peer: p, conn: conn, done: make(chan struct{})}
+	s := &Session{hub: h, peer: p, conn: conn, done: make(chan struct{}), initiatorID: h.cfg.ID}
 	if err := s.handshake(psk, true); err != nil {
 		h.log.Printf("连接 %s(%s) 握手失败: %v", p.Name, addr, err)
 		_ = conn.Close()
