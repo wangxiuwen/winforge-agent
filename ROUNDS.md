@@ -12,8 +12,8 @@
 - [ ] R2+ 托盘实机验证：图标显示、菜单动作、共享开关勾选态、tooltip 随控制态变化
 - [ ] R2+ 真机键鼠共享实测：钩子捕获→对端注入（同机双实例无法测钩子，需真机或驱动级模拟）
 - [ ] R2+ 热键 RegisterHotKey 实测（Ctrl+Alt+D 切换）
-- [ ] R2+ 断线重连：杀对端进程 → 自动重连 → 控制态复位不卡键
-- [ ] R2+ 同机双实例发现：UDP SO_REUSEADDR（参考 internal/discovery/reuse_windows.go）
+- [x] R2 断线重连（e2e：强制断开 TCP → 自动重连 → 消息恢复）；杀进程级+控制态不卡键待真机
+- [x] R2 同机双实例发现：UDP SO_REUSEADDR（参考 internal/discovery/reuse_windows.go）
 - [ ] R2+ `winforge desk autostart on|off`（HKCU Run 注册表，x/sys/windows/registry）
 - [ ] R2+ 独立 GUI 构建 winforge-desk.exe（-H=windowsgui，无控制台黑窗；参见 monctl 经验）
 - [ ] R2+ 传输增强：取消进行中传输、接收端进度限频、1GB 级大文件
@@ -38,6 +38,15 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R2（2026-10-26）
+- 发现服务改用 net.ListenConfig{Control: reuseControl}：Windows 只设 SO_REUSEADDR，
+  unix 加 SO_REUSEPORT（照搬 internal/discovery 的成熟做法）→ 同机双实例可共用
+  41832/UDP 互相广播发现。
+- 冒烟升级：两个实例都用 41832，新增第 0 步"UDP 广播发现互通"断言，全流程通过
+  （发现→配对→会话→消息→3MB 文件→控制状态机）。
+- 新增 TestHubReconnectAfterDrop：强制断 TCP → 3s 退避重连 → 重连后消息可达。
+- 注意点：ListenPacket 返回 net.PacketConn，要断言成 *net.UDPConn 才有 ReadFromUDP。
 
 ### R1（2026-10-26）
 - 新增 internal/desk（~3200 行）：proto/crypto/pairing/session/hub(_msg/_ctl/_ui)/discovery/

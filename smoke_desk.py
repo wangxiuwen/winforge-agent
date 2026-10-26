@@ -49,14 +49,14 @@ def wait_for(fn, what, timeout=20):
         time.sleep(0.3)
     raise SystemExit("超时: %s (last=%r)" % (what, last))
 
-def start_instance(name, ui_port, ctl_port, downloads):
+def start_instance(name, ui_port, ctl_port, downloads, disc_port=0):
     os.makedirs(downloads, exist_ok=True)
     cfgdir = os.path.join(BASE, name)
     os.makedirs(cfgdir, exist_ok=True)
     cfgpath = os.path.join(cfgdir, "desk.json")
     cfg = {
         "id": secrets.token_hex(16), "name": name,
-        "ui_port": ui_port, "control_port": ctl_port, "discovery_port": 0,
+        "ui_port": ui_port, "control_port": ctl_port, "discovery_port": disc_port,
         "hotkey": "Ctrl+Alt+D", "downloads_dir": downloads,
         "max_file_bytes": 104857600, "share_enabled": True, "peers": [],
     }
@@ -77,10 +77,18 @@ def start_instance(name, ui_port, ctl_port, downloads):
 def main():
     shutil.rmtree(BASE, ignore_errors=True)
     os.makedirs(BASE, exist_ok=True)
-    a = start_instance("实例A", 41930, 41931, os.path.join(BASE, "dl-a"))
-    b = start_instance("实例B", 41940, 41941, os.path.join(BASE, "dl-b"))
+    a = start_instance("实例A", 41930, 41931, os.path.join(BASE, "dl-a"), disc_port=41832)
+    b = start_instance("实例B", 41940, 41941, os.path.join(BASE, "dl-b"), disc_port=41832)
     print("[ok] 两实例已启动", a["base"], b["base"])
     try:
+        # 0) 真发现：同机双实例共用 41832/UDP（SO_REUSEADDR），广播互相可见
+        a_id = snapshot(a["base"], a["token"])["self"]["id"]
+        b_id = snapshot(b["base"], b["token"])["self"]["id"]
+        wait_for(lambda: any(p["id"] == b_id for p in snapshot(a["base"], a["token"]).get("presence") or []),
+                 "A 通过 UDP 广播发现 B")
+        wait_for(lambda: any(p["id"] == a_id for p in snapshot(b["base"], b["token"]).get("presence") or []),
+                 "B 通过 UDP 广播发现 A")
+        print("[ok] UDP 广播发现互通")
         # 1) 配对：A 发起 → B 出请求 → 双确认
         bport = snapshot(b["base"], b["token"])["self"]["port"]
         assert bport == 41941, bport

@@ -3,6 +3,7 @@ package desk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -65,13 +66,21 @@ func NewDiscovery(selfID string, port int, name func() string, controlPort func(
 }
 
 // Start 启动广播与监听，直到 ctx 结束。
+// 监听带 SO_REUSEADDR（unix 另加 SO_REUSEPORT）：同一台机器跑多个 desk
+// 实例（双实例自测）或与系统服务共存时都能占住同一发现端口。
 func (d *Discovery) Start(ctx context.Context, discoveryPort int) error {
 	addr := &net.UDPAddr{Port: discoveryPort}
-	conn, err := net.ListenUDP("udp4", addr)
+	cfg := net.ListenConfig{Control: reuseControl}
+	conn, err := cfg.ListenPacket(context.Background(), "udp4", addr.String())
 	if err != nil {
 		return err
 	}
-	d.conn = conn
+	udpConn, ok := conn.(*net.UDPConn)
+	if !ok {
+		conn.Close()
+		return errors.New("发现监听类型异常")
+	}
+	d.conn = udpConn
 	broadcast := &net.UDPAddr{IP: net.IPv4bcast, Port: discoveryPort}
 	loopback := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: discoveryPort}
 
@@ -93,7 +102,7 @@ func (d *Discovery) Start(ctx context.Context, discoveryPort int) error {
 	go func() {
 		buf := make([]byte, 4096)
 		for {
-			n, from, err := conn.ReadFromUDP(buf)
+			n, from, err := udpConn.ReadFromUDP(buf)
 			if err != nil {
 				return
 			}

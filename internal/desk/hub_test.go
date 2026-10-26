@@ -359,3 +359,40 @@ func TestHubPeerRemoveDisconnects(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// TestHubReconnectAfterDrop 拔线场景：会话被强制断开后自动重连、消息恢复。
+func TestHubReconnectAfterDrop(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+
+	// 模拟断线：直接关掉 A 侧会话的 TCP。
+	a.mu.Lock()
+	s := a.sessions[peerB.ID]
+	a.mu.Unlock()
+	if s == nil {
+		t.Fatal("会话应在线")
+	}
+	_ = s.conn.Close()
+
+	// 退避重连后恢复在线。
+	waitFor(t, 15*time.Second, "断线后自动重连", func() bool {
+		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
+	})
+	// 重连后的会话能继续收发。
+	if err := a.SendChat(peerB.ID, "重连后的消息"); err != nil {
+		t.Fatalf("重连后发消息: %v", err)
+	}
+	waitFor(t, 5*time.Second, "重连后消息送达", func() bool {
+		for _, d := range emitterOf(b).all() {
+			if m, ok := d.data.(map[string]interface{}); ok && d.name == "desk:chat" {
+				if txt, _ := m["text"].(string); txt == "重连后的消息" {
+					return true
+				}
+			}
+		}
+		return false
+	})
+}
