@@ -39,6 +39,19 @@
 
 ## 轮次记录
 
+### R10（2026-10-26）
+- 回归加固轮（功能清单已清空）。
+- govulncheck 本地预检：0 可达漏洞（模块级 5 条均为未调用，不阻塞 CI）。
+- make release 发版演练：8 个产物全出（CLI 三平台 ×2 架构 + winforgedesk
+  windowsgui amd64/arm64），SHA256SUMS 生成正常。
+- UI 命令边界测试 TestUICommandBoundaries：空/超长消息、离线对端、坏地址、
+  未知对端的方位/启停/删除、非法 fid/peerID 的取消/历史/表态、未配对控制、
+  空闲态交还、共享开关连打——全部不 panic 且语义正确。
+- 产品加固（测试红→修）：SetPeerPosition/RemovePeer 对未知对端由静默成功
+  改为报错；PairStart 增加主机名字符白名单（SplitHostPort 竟接受含空格 host）。
+- TestChatHistoryFileIsolation：非法 peerID 不产生聊天文件。
+- -race 全量绿 + 冒烟通过。
+
 ### R9（2026-10-26）
 - 聊天记录持久化：每对端一个 JSON（配置目录 chat/<peerID>.json，≤500 条，
   原子重写），Hub 启动恢复；加载时过滤未来时间戳与超长文本（防手改文件注入）。

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"time"
 )
@@ -77,10 +78,17 @@ func (h *Hub) emitState() {
 
 // ---- 配对 ----
 
+// addrHostRe 允许 IPv4/IPv6 字面量与常见主机名字符，拒绝空格等明显垃圾。
+var addrHostRe = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+
 // PairStart 发起配对（地址形如 192.168.1.5:41831）。
 func (h *Hub) PairStart(addr string) error {
-	if _, _, err := net.SplitHostPort(addr); err != nil {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
 		return fmt.Errorf("地址格式应为 IP:端口: %w", err)
+	}
+	if !addrHostRe.MatchString(host) {
+		return fmt.Errorf("地址含非法字符: %q", host)
 	}
 	h.mu.Lock()
 	if h.pairOut != nil {

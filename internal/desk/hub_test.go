@@ -794,3 +794,79 @@ func TestChainSwitch(t *testing.T) {
 			c.Snapshot()["control"].(ControlState).Role == roleIdle
 	})
 }
+
+// TestUICommandBoundaries UI 命令边界：非法输入必须报错而非 panic。
+func TestUICommandBoundaries(t *testing.T) {
+	pa := newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+
+	// SendChat：空、超长、离线对端。
+	if err := a.SendChat("whatever", ""); err == nil {
+		t.Error("空消息应报错")
+	}
+	if err := a.SendChat("whatever", string(make([]byte, maxChatLength+1))); err == nil {
+		t.Error("超长消息应报错")
+	}
+	if err := a.SendChat("no-such-peer", "hi"); err == nil {
+		t.Error("离线对端应报错")
+	}
+
+	// PairStart：缺端口、坏地址。
+	if err := a.PairStart("no-port"); err == nil {
+		t.Error("无端口地址应报错")
+	}
+	if err := a.PairStart("bad host:1"); err == nil {
+		t.Error("含空格的地址应报错")
+	}
+
+	// PeerPosition / PeerToggle / PeerRemove：不存在的对端。
+	if err := a.PeerPosition("ghost", "right"); err == nil {
+		t.Error("未知对端设置方位应报错")
+	}
+	if err := a.PeerToggle("ghost", true); err == nil {
+		t.Error("未知对端启停应报错")
+	}
+	if err := a.PeerRemove("ghost"); err == nil {
+		t.Error("未知对端删除应报错")
+	}
+
+	// 取消/历史/表态：未知 ID 静默忽略（不 panic 即为通过）。
+	a.CancelTransfer("zzzz")
+	a.CancelTransfer("")
+	a.TransferRespond("not-hex", true)
+	a.ChatHistory("../../etc/passwd") // 非法 ID 不应触碰文件系统
+	a.PairRespond("ghost", true)
+a.PairConfirmOut(true)
+
+	// 控制命令：未配对对端。
+	if err := a.TakeControl("ghost", 0.5); err == nil {
+		t.Error("控制未配对对端应报错")
+	}
+	a.ReleaseControl(-1) // 空闲态交还不应 panic
+	a.ToggleShare(true)
+	a.ToggleShare(false)
+	a.ToggleShare(true)
+}
+
+// TestChatHistoryFileIsolation 非法 peerID 不能生成聊天文件。
+func TestChatHistoryFileIsolation(t *testing.T) {
+	pa := newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	a.recordChat("../../evil", ChatMsg{Text: "x", Ts: 1})
+	a.recordChat("合法id-带汉字", ChatMsg{Text: "x", Ts: 1})
+	// chat 目录不应存在或为空（两个 ID 都不合法）。
+	chatDir := filepath.Join(filepath.Dir(aChatCfgPath(a)), "chat")
+	if _, err := os.Stat(chatDir); !os.IsNotExist(err) {
+		es, _ := os.ReadDir(chatDir)
+		if len(es) != 0 {
+			t.Fatalf("非法 ID 不应产生聊天文件: %v", es)
+		}
+	}
+}
+
+// aChatCfgPath 取测试 Hub 的配置路径。
+func aChatCfgPath(h *Hub) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfgPath
+}

@@ -180,13 +180,19 @@ func (c *Config) UpPeer(path string, p Peer) error {
 	return SaveConfig(path, c)
 }
 
-// RemovePeer 删除配对记录并写盘。
+// RemovePeer 删除配对记录并写盘；对端不存在时报错。
 func (c *Config) RemovePeer(path, id string) error {
 	out := c.Peers[:0]
+	found := false
 	for _, p := range c.Peers {
-		if p.ID != id {
-			out = append(out, p)
+		if p.ID == id {
+			found = true
+			continue
 		}
+		out = append(out, p)
+	}
+	if !found {
+		return fmt.Errorf("没有配对设备 %s", id)
 	}
 	c.Peers = out
 	return SaveConfig(path, c)
@@ -197,13 +203,18 @@ func (c *Config) SetPeerPosition(path, id, pos string) error {
 	if pos != "left" && pos != "right" && pos != "" {
 		return fmt.Errorf("非法方位 %q", pos)
 	}
+	found := false
 	for i := range c.Peers {
 		if c.Peers[i].Position == pos && pos != "" && c.Peers[i].ID != id {
 			c.Peers[i].Position = ""
 		}
 		if c.Peers[i].ID == id {
 			c.Peers[i].Position = pos
+			found = true
 		}
+	}
+	if !found {
+		return fmt.Errorf("没有配对设备 %s", id)
 	}
 	return SaveConfig(path, c)
 }
