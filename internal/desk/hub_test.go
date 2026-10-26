@@ -55,12 +55,13 @@ func (f *fakeInjector) Released() int {
 
 // fakePlatform 提供可控的捕获/注入。
 type fakePlatform struct {
-	mu       sync.Mutex
-	inj      *fakeInjector
-	capture  chan InputEvent
-	hotkeyCh chan struct{}
-	escapeCh chan struct{}
-	cursor   [2]int32
+	mu        sync.Mutex
+	inj       *fakeInjector
+	capture   chan InputEvent
+	hotkeyCh  chan struct{}
+	escapeCh  chan struct{}
+	cursor    [2]int32
+	indicator []string // "on/controller", "on/controlled", "off"
 }
 
 func newFakePlatform() *fakePlatform {
@@ -70,6 +71,13 @@ func newFakePlatform() *fakePlatform {
 		hotkeyCh: make(chan struct{}, 1),
 		escapeCh: make(chan struct{}, 1),
 	}
+}
+
+// Indicators 返回提示条状态序列快照。
+func (f *fakePlatform) Indicators() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.indicator...)
 }
 
 // sendCapture 往捕获通道投递事件（并发安全）。
@@ -91,8 +99,20 @@ func (f *fakePlatform) toPlatform() Platform {
 			f.mu.Unlock()
 			return func() { close(ch) }, nil
 		},
-		Hotkey:       f.hotkeyCh,
-		Escape:       f.escapeCh,
+		Hotkey: f.hotkeyCh,
+		Escape: f.escapeCh,
+		SetControlIndicator: func(on bool, controller bool, edge Edge) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			switch {
+			case !on:
+				f.indicator = append(f.indicator, "off")
+			case controller:
+				f.indicator = append(f.indicator, "on/controller")
+			default:
+				f.indicator = append(f.indicator, "on/controlled")
+			}
+		},
 		ScreenBounds: func() ScreenBounds { return ScreenBounds{X: 0, Y: 0, W: 1920, H: 1080} },
 		CursorPos: func() (int32, int32) {
 			f.mu.Lock()
@@ -634,4 +654,31 @@ func TestMoveCoalescingAndLatency(t *testing.T) {
 	waitFor(t, 5*time.Second, "双方回空闲", func() bool {
 		return a.Snapshot()["control"].(ControlState).Role == roleIdle
 	})
+}
+
+// TestControlIndicator 控制状态驱动的边缘提示条序列。
+func TestControlIndicator(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+
+	if err := a.TakeControl(peerB.ID, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "A 提示条=控制中", func() bool {
+		return seqEndsWith(pa.Indicators(), "on/controller")
+	})
+	waitFor(t, 5*time.Second, "B 提示条=被控", func() bool {
+		return seqEndsWith(pb.Indicators(), "on/controlled")
+	})
+	a.ReleaseControl(-1)
+	waitFor(t, 5*time.Second, "双方提示条=关闭", func() bool {
+		return seqEndsWith(pa.Indicators(), "off") && seqEndsWith(pb.Indicators(), "off")
+	})
+}
+
+func seqEndsWith(seq []string, last string) bool {
+	return len(seq) > 0 && seq[len(seq)-1] == last
 }

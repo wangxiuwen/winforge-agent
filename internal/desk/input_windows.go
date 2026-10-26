@@ -183,6 +183,10 @@ func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 		injButtons: map[MouseButton]bool{},
 	}
 	wi.startThread(hotkey, logger)
+	setIndicator, err := startEdgeIndicator()
+	if err != nil {
+		logger.Printf("边缘提示条不可用: %v", err)
+	}
 	return &Platform{
 		Injector: func() (Injector, error) { return wi, nil },
 		StartCapture: func(ch chan InputEvent) (func(), error) {
@@ -208,6 +212,7 @@ func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 		SetCursor: func(x, y int32) {
 			procSetCursorPos.Call(uintptr(int32(x)), uintptr(int32(y)))
 		},
+		SetControlIndicator: setIndicator,
 	}
 }
 
@@ -586,4 +591,11 @@ func parseHotkey(s string) (mods uint32, vk uint32, ok bool) {
 		}
 	}
 	return mods, vk, vk != 0xFFFFFFFF && mods != 0
+}
+
+// NewPlatformProbe 诊断入口：暴露 NewPlatform 给最小复现程序。
+func NewPlatformProbe() string {
+	p := NewPlatform("Ctrl+Alt+D", log.Default())
+	_ = p
+	return "platform-ready"
 }

@@ -36,6 +36,8 @@ type Platform struct {
 	CursorPos func() (int32, int32)
 	// SetCursor 移动物理光标。
 	SetCursor func(x, y int32)
+	// SetControlIndicator 控制状态可视化（Windows: 屏幕边缘提示条）；可为 nil。
+	SetControlIndicator func(on bool, controller bool, edge Edge)
 }
 
 // 控制角色。
@@ -340,7 +342,7 @@ func (h *Hub) sessionClosed(s *Session) {
 		role := h.ctl.Role
 		h.cleanupControlLocked()
 		h.mu.Unlock()
-		h.emit("desk:control", h.ctl)
+		h.controlChanged()
 		h.toast("warn", "与 "+s.PeerName()+" 的连接断开，控制已复位")
 		_ = role
 		return

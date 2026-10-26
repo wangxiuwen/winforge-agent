@@ -52,7 +52,16 @@ h3 small { color: var(--dim); font-weight: normal; margin-left: 8px; }
 .card .meta { color: var(--dim); font-size: 12px; }
 .card .grow { flex: 1; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
-.dot.on { background: var(--ok); }
+.dot.on { background: var(--ok); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 196, 122, .5); }
+  50% { box-shadow: 0 0 0 5px rgba(82, 196, 122, 0); }
+}
+.ctl-status.ctrl, .ctl-status.victim { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.18); }
+}
 button {
   background: var(--accent); color: #0d1117; border: none; border-radius: 6px;
   padding: 6px 14px; cursor: pointer; font-size: 13px;

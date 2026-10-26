@@ -18,6 +18,30 @@ var (
 //   roleControlled：本机接收注入；本地真实输入照常。
 // 切换手段：屏幕边缘推挤（双方都装了边缘观察）、全局热键、UI 按钮。
 
+// controlChanged 控制状态变化：发 UI 事件 + 驱动边缘提示条。
+func (h *Hub) controlChanged() {
+	h.emit("desk:control", h.ctl)
+	if h.platform.SetControlIndicator == nil {
+		return
+	}
+	switch h.ctl.Role {
+	case roleController:
+		h.platform.SetControlIndicator(true, true, h.controlEdge())
+	case roleControlled:
+		h.platform.SetControlIndicator(true, false, h.controlEdge())
+	default:
+		h.platform.SetControlIndicator(false, false, EdgeNone)
+	}
+}
+
+// controlEdge 当前控制状态对应的共享边；无方位时右侧兜底（保证有可见反馈）。
+func (h *Hub) controlEdge() Edge {
+	if p, ok := h.cfg.Peer(h.ctl.PeerID); ok && p.Position != "" {
+		return edgeForPosition(p.Position)
+	}
+	return EdgeRight
+}
+
 // onEdge 边缘意图回调（平台层已做去抖）。
 func (h *Hub) onEdge(edge Edge, yRatio float64) {
 	h.mu.Lock()
@@ -79,7 +103,7 @@ func (h *Hub) TakeControl(peerID string, yRatio float64) error {
 	if yRatio < 0 {
 		yRatio = cursorYRatio(h.platform.ScreenBounds(), y)
 	}
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 	go func() { _ = s.sendJSON(wireMsg{T: msgCtlTake, Y: yRatio}) }()
 	return nil
 }
@@ -104,7 +128,7 @@ func (h *Hub) onCtlTake(s *Session, m wireMsg) {
 	h.injKeys = NewPressedKeys()
 	h.injButtons = map[MouseButton]bool{}
 	h.placeCursorForEntryLocked(s.peer.ID, m.Y)
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 	h.mu.Unlock()
 	_ = s.sendJSON(wireMsg{T: msgCtlTakeOK})
 	h.toast("info", s.PeerName()+" 正在控制这台机器（推开共享边或按热键拿回）")
@@ -149,7 +173,7 @@ func (h *Hub) onCtlTakeOK(s *Session) {
 	if err != nil {
 		h.ctl = ControlState{Role: roleIdle}
 		h.integ = nil
-		h.emit("desk:control", h.ctl)
+		h.controlChanged()
 		h.toast("error", "键鼠捕获启动失败: "+err.Error())
 		return
 	}
@@ -158,7 +182,7 @@ func (h *Hub) onCtlTakeOK(s *Session) {
 	h.ctlDone = make(chan struct{})
 	done := h.ctlDone
 	go h.captureLoop(s, ch, done)
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 	h.toast("info", "正在控制 "+s.PeerName()+"（热键或推回边缘可结束）")
 }
 
@@ -169,7 +193,7 @@ func (h *Hub) onCtlDeny(s *Session) {
 	if h.ctl.Role == roleController && h.ctl.PeerID == s.peer.ID {
 		h.ctl = ControlState{Role: roleIdle}
 		h.integ = nil
-		h.emit("desk:control", h.ctl)
+		h.controlChanged()
 		h.toast("warn", s.PeerName()+" 拒绝了控制请求")
 	}
 }
@@ -269,7 +293,7 @@ func (h *Hub) onCtlRelease(s *Session, m wireMsg) {
 	}
 	role := h.ctl.Role
 	h.cleanupControlLocked()
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 	h.mu.Unlock()
 	_ = s.sendJSON(wireMsg{T: msgCtlReleaseOK})
 	if role == roleController {
@@ -287,7 +311,7 @@ func (h *Hub) onCtlReleaseOK(s *Session) {
 		return
 	}
 	h.cleanupControlLocked()
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 }
 
 // endControlLocal 强制本地收尾（超时/断线兜底）。
@@ -298,7 +322,7 @@ func (h *Hub) endControlLocal() {
 		return
 	}
 	h.cleanupControlLocked()
-	h.emit("desk:control", h.ctl)
+	h.controlChanged()
 }
 
 // cleanupControlLocked 复位控制状态：停捕获、停注入、还光标、清按键。

@@ -18,7 +18,7 @@
 - [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
 - [x] R5 传输增强：取消（收发双侧+UI 按钮+对端联动）、接收进度 200ms 限频、32MB 冒烟实测（1GB 靠同一机制，未单独实测）
 - [ ] R2+ UI 打磨：聊天记录持久化（会话级）、连接状态动效（拖拽发送与多对端消息隔离已完成→R6）
-- [ ] R2+ 控制体验：控制时对端屏幕边缘提示条、光标进入动画（Esc 快捷交还已完成→见 R5）
+- [ ] R2+ 控制体验：光标进入动画（边缘提示条已完成→R8，颜色效果待用户实测；Esc 见 R5）
 - [ ] R2+ 多对端拓扑（>2 台）：链式切换（方位互斥与控制互斥已由 TestMultiPeerTopology 覆盖→R6）
 - [x] R7 性能：移动事件 8ms 合帧（500→1 帧实测）+ capture→inject 往返延迟测量（本机 loopback ~50ms；真实局域网延迟待真机）
 - [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
@@ -38,6 +38,21 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R8（2026-10-26）
+- 控制状态边缘提示条（Windows 分层窗口）：共享激活时在共享边显示 3px 常亮条
+  （我在控制=绿 / 被控制=琥珀），空闲隐藏；WS_EX_LAYERED|TRANSPARENT|TOPMOST|
+  TOOLWINDOW，鼠标穿透不抢焦点不进 Alt-Tab。颜色切换用 GCLP_HBRBACKGROUND
+  换背景刷 + InvalidateRect。
+- 状态出口收敛：所有控制状态变化统一走 Hub.controlChanged()（UI 事件 + 提示条），
+  Platform 新增 SetControlIndicator；TestControlIndicator 断言两侧状态序列。
+- ★大坑两次踩点：① CreateSolidBrush 在 gdi32.dll 不在 user32，LazyProc 找不到
+  过程直接 panic 且带崩整个进程（smoke 表现为"启动超时"，需要最小复现程序才能
+  定位）；② sed 全局替换把 controlChanged 体内的 emit 也替换成自身 → 无限递归
+  栈溢出。全局替换后必须 review 差异。
+- UI 动效：在线设备呼吸点（pulse）、控制状态条呼吸亮度。
+- GUI 实机启动验证：edgebar 线程随进程创建无报错、控制端口正常监听；
+  提示条颜色效果待用户实测。-race 全量绿 + 冒烟通过。
 
 ### R7（2026-10-26）
 - 移动事件合帧：captureLoop 对鼠标移动做 8ms 窗口合并（只发最新归一化位置），
