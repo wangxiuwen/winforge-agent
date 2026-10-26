@@ -1,0 +1,175 @@
+go: downloading golang.org/x/net v0.56.0
+go: downloading golang.org/x/sys v0.46.0
+?   	github.com/wangxiuwen/winforge-agent/cmd/winforge	[no test files]
+?   	github.com/wangxiuwen/winforge-agent/cmd/winforgedesk	[no test files]
+ok  	github.com/wangxiuwen/winforge-agent/internal/agent	1.016s
+ok  	github.com/wangxiuwen/winforge-agent/internal/client	1.018s
+?   	github.com/wangxiuwen/winforge-agent/internal/config	[no test files]
+[主机A] 2026/10/26 18:17:09 desk 控制端口 37993，ID 5279ddaab873f9a926da521c550ce53e，名称 主机A
+[主机B] 2026/10/26 18:17:09 desk 控制端口 37971，ID c22631cc6fc19f58abca244cf06d8cfa，名称 主机B
+[主机A] 2026/10/26 18:17:09 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:09 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:09 desk 控制端口 46697，ID 14a1bb427230be9861c3e6dd1b4096f8，名称 主机A
+[主机B] 2026/10/26 18:17:09 desk 控制端口 33929，ID b41bc52cd7787029abd9c63c19e3f3ed，名称 主机B
+[主机A] 2026/10/26 18:17:09 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:09 [info] 已与 主机A 配对
+[主机B] 2026/10/26 18:17:09 [info] 主机A 想发送文件 源文件.bin
+[主机B] 2026/10/26 18:17:09 [info] 收到文件 源文件.bin，已保存到 /tmp/TestHubFileTransfer4133138540/003/源文件.bin
+[主机A] 2026/10/26 18:17:09 desk 控制端口 37131，ID 442553f2de5943d95064d71ce17d9c35，名称 主机A
+[主机B] 2026/10/26 18:17:09 desk 控制端口 40923，ID dbf40b81a58bb5d39471a6f49ad5d4a4，名称 主机B
+[主机A] 2026/10/26 18:17:09 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:09 [info] 已与 主机A 配对
+[主机B] 2026/10/26 18:17:10 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:10 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机A] 2026/10/26 18:17:10 [info] 已停止控制 主机B
+[主机A] 2026/10/26 18:17:10 desk 控制端口 41957，ID c6688fb70a608b84730179d24beba8dc，名称 主机A
+[主机B] 2026/10/26 18:17:10 desk 控制端口 39769，ID e4c379eccb89a64262997eccbcb69b7e，名称 主机B
+[主机B] 2026/10/26 18:17:10 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:10 [info] 已与 主机B 配对
+[主机A] 2026/10/26 18:17:10 [warn] 主机B 拒绝了控制请求
+[主机A] 2026/10/26 18:17:10 desk 控制端口 36677，ID 48064ac695f16879d980e8a24b5204ba，名称 主机A
+[主机B] 2026/10/26 18:17:10 desk 控制端口 46215，ID d8940d8c4c108a4f71be4df968b50565，名称 主机B
+[主机B] 2026/10/26 18:17:10 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:10 [info] 已与 主机B 配对
+[主机A] 2026/10/26 18:17:10 desk 控制端口 34305，ID c66d0336eccdb84facb7a12694419cdf，名称 主机A
+[主机B] 2026/10/26 18:17:10 desk 控制端口 35515，ID 3a1d6bd1ac42060dfa711e7a623381b9，名称 主机B
+[主机A] 2026/10/26 18:17:10 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:10 [info] 已与 主机A 配对
+==================
+WARNING: DATA RACE
+Write at 0x00c0001b5380 by goroutine 166:
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Config).UpPeer()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/config.go:175 +0x14c
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).dialSession()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:450 +0x934
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).connectMissing()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:424 +0x6fb
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).runSessions()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:390 +0x1d7
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).Start.func4()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:239 +0x46
+  github.com/wangxiuwen/winforge-agent/internal/desk.safeGo.func1()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/recover.go:19 +0xb6
+
+Previous read at 0x00c0001b5380 by goroutine 190:
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Config).Peer()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/config.go:163 +0x12b
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).acceptSession()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:319 +0x45
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).acceptOne()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:311 +0x227
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).acceptLoop.gowrap1()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:295 +0x46
+
+Goroutine 166 (running) created at:
+  github.com/wangxiuwen/winforge-agent/internal/desk.safeGo()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/recover.go:11 +0x119
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).Start()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:239 +0xd64
+  github.com/wangxiuwen/winforge-agent/internal/desk.newTestHub()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub_test.go:156 +0x565
+  github.com/wangxiuwen/winforge-agent/internal/desk.TestHubReconnectAfterDrop()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub_test.go:407 +0x546
+  testing.tRunner()
+      /opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2036 +0x21c
+  testing.(*T).Run.gowrap1()
+      /opt/hostedtoolcache/go/1.26.5/x64/src/testing/testing.go:2101 +0x38
+
+Goroutine 190 (running) created at:
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).acceptLoop()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:295 +0x4a
+  github.com/wangxiuwen/winforge-agent/internal/desk.(*Hub).Start.func5()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/hub.go:240 +0x46
+  github.com/wangxiuwen/winforge-agent/internal/desk.safeGo.func1()
+      /home/runner/work/winforge-agent/winforge-agent/internal/desk/recover.go:19 +0xb6
+==================
+--- FAIL: TestHubReconnectAfterDrop (4.08s)
+    testing.go:1712: race detected during execution of test
+[主机A] 2026/10/26 18:17:14 desk 控制端口 32853，ID 5d14d4d4ce645303b55eff8cee2042aa，名称 主机A
+[主机B] 2026/10/26 18:17:14 desk 控制端口 33189，ID b227a49e93a3cd133996a4fb4c605f15，名称 主机B
+[主机A] 2026/10/26 18:17:14 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:14 [info] 已与 主机A 配对
+[主机B] 2026/10/26 18:17:14 [info] 主机A 想发送文件 cancelme.bin
+[主机A] 2026/10/26 18:17:14 [info] 已取消发送 cancelme.bin
+[主机A] 2026/10/26 18:17:14 desk 控制端口 46877，ID 9d755cb974b4df6cb789bf47339874db，名称 主机A
+[主机B] 2026/10/26 18:17:14 desk 控制端口 38555，ID 77ac163d843c01fa9a60504f55421ac2，名称 主机B
+[主机B] 2026/10/26 18:17:14 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:14 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:14 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:14 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机B] 2026/10/26 18:17:14 [info] 已按 Esc 交还控制（主机A）
+[主机A] 2026/10/26 18:17:14 [info] 已停止控制 主机B
+[主机A] 2026/10/26 18:17:14 desk 控制端口 34921，ID 1cbabd9199d3d4d9cee51da91af0225d，名称 主机A
+[主机B] 2026/10/26 18:17:14 desk 控制端口 42359，ID 05b64636a38dc5df194412b5f3c41b56，名称 主机B
+[主机C] 2026/10/26 18:17:14 desk 控制端口 39249，ID 0ed73770d2d817d1cf0aa749265ab364，名称 主机C
+[主机A] 2026/10/26 18:17:15 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:15 [info] 已与 主机A 配对
+[主机C] 2026/10/26 18:17:15 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:15 [info] 已与 主机C 配对
+[主机B] 2026/10/26 18:17:15 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:15 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机C] 2026/10/26 18:17:15 [warn] 主机A 拒绝了控制请求
+[主机A] 2026/10/26 18:17:15 [info] 已停止控制 主机B
+[主机C] 2026/10/26 18:17:15 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:15 [info] 正在控制 主机C（热键或推回边缘可结束）
+[主机C] 2026/10/26 18:17:15 [info] 主机A 已交还控制
+[主机A] 2026/10/26 18:17:15 desk 控制端口 45421，ID 86f688b99fdb9b376a880aeee737070b，名称 主机A
+[主机B] 2026/10/26 18:17:15 desk 控制端口 34673，ID 2b9d8e9c9b8b62b2f3a3449d25112137，名称 主机B
+[主机A] 2026/10/26 18:17:15 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:15 [info] 已与 主机A 配对
+[主机B] 2026/10/26 18:17:15 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:15 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机B] 2026/10/26 18:17:15 [info] 主机A 已交还控制
+[主机A] 2026/10/26 18:17:15 desk 控制端口 35933，ID 875fe3e29bcf969d99649774cf0c630c，名称 主机A
+[主机B] 2026/10/26 18:17:15 desk 控制端口 34873，ID 495c55f6b88997c559e9a4f55e30791f，名称 主机B
+[主机B] 2026/10/26 18:17:15 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:15 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:15 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:15 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机B] 2026/10/26 18:17:15 [info] 主机A 已交还控制
+[主机A] 2026/10/26 18:17:15 desk 控制端口 41877，ID 0ade67bb413164c29ae33d08f3b7a99f，名称 主机A
+[主机B] 2026/10/26 18:17:15 desk 控制端口 42615，ID 638ee49fa367b643d5ead69edfc45962，名称 主机B
+[主机B] 2026/10/26 18:17:15 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:15 [info] 已与 主机B 配对
+[重启] 2026/10/26 18:17:15 desk 控制端口 42063，ID 638ee49fa367b643d5ead69edfc45962，名称 主机B
+[主机A] 2026/10/26 18:17:15 desk 控制端口 37769，ID ac5d2e0e9930ee9ee0ede586283ced4d，名称 主机A
+[主机B] 2026/10/26 18:17:15 desk 控制端口 45765，ID b953c9feaf8540bf52be80ef387181b5，名称 主机B
+[主机C] 2026/10/26 18:17:15 desk 控制端口 44625，ID 512e05dc99cbd7106603a28d93328378，名称 主机C
+[主机B] 2026/10/26 18:17:16 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:16 [info] 已与 主机B 配对
+[主机C] 2026/10/26 18:17:16 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:16 [info] 已与 主机C 配对
+[主机A] 2026/10/26 18:17:16 [info] 已与 主机C 配对
+[主机C] 2026/10/26 18:17:16 [info] 已与 主机A 配对
+[主机B] 2026/10/26 18:17:16 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:16 [info] 正在控制 主机B（热键或推回边缘可结束）
+[主机A] 2026/10/26 18:17:16 [info] 链式切换 → 主机C
+[主机B] 2026/10/26 18:17:16 [info] 主机A 已交还控制
+[主机C] 2026/10/26 18:17:16 [info] 主机A 正在控制这台机器（推开共享边或按热键拿回）
+[主机A] 2026/10/26 18:17:16 [info] 正在控制 主机C（热键或推回边缘可结束）
+[主机C] 2026/10/26 18:17:16 [info] 主机A 已交还控制
+[主机A] 2026/10/26 18:17:16 desk 控制端口 39127，ID 12a6c3d51ff47707c5121ea577f658dd，名称 主机A
+[主机A] 2026/10/26 18:17:16 desk 控制端口 44857，ID 23831cabcc2a81c6018925f8d0aaed83，名称 主机A
+[主机A] 2026/10/26 18:17:16 desk 控制端口 41735，ID 4a6bbd49b8614895c07d43ebc0fb3c17，名称 主机A
+[主机B] 2026/10/26 18:17:16 desk 控制端口 43993，ID 07e3375edf2bfe1e5d073f397b7d0355，名称 主机B
+[主机A] 2026/10/26 18:17:16 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:16 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:16 desk 控制端口 42771，ID a15185f7540a09e925fcdb06aff87112，名称 主机A
+[主机B] 2026/10/26 18:17:16 desk 控制端口 35607，ID 8834ed6665b5e24c1116ce09f2796339，名称 主机B
+[主机A] 2026/10/26 18:17:16 [info] 已与 主机B 配对
+[主机B] 2026/10/26 18:17:16 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:20 desk 控制端口 35149，ID 0bbc43d278d6ea26b2cb236696983a5c，名称 主机A
+[主机B] 2026/10/26 18:17:20 desk 控制端口 43683，ID 9a1b44e1f06a94b222d15098497e8682，名称 主机B
+[主机B] 2026/10/26 18:17:20 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:20 [info] 已与 主机B 配对
+[主机A] 2026/10/26 18:17:22 desk 控制端口 42353，ID cbcee88b448780a89a474fb1c3741aa3，名称 主机A
+[主机B] 2026/10/26 18:17:22 desk 控制端口 37747，ID 96ac71ec2d9393a42050d20dc979f298，名称 主机B
+[主机B] 2026/10/26 18:17:22 [info] 已与 主机A 配对
+[主机A] 2026/10/26 18:17:22 [info] 已与 主机B 配对
+upload status: 400
+FAIL
+FAIL	github.com/wangxiuwen/winforge-agent/internal/desk	16.116s
+ok  	github.com/wangxiuwen/winforge-agent/internal/deskapp	1.015s
+ok  	github.com/wangxiuwen/winforge-agent/internal/discovery	1.314s
+ok  	github.com/wangxiuwen/winforge-agent/internal/security	1.015s
+FAIL
