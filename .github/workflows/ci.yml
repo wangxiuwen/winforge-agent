@@ -23,13 +23,11 @@ jobs:
       - name: Publish test log
         if: failure()
         run: |
-          git config user.email ci@winforge.local
-          git config user.name ci-bot
-          git checkout --orphan ci-log
-          git rm -rf --cached . >/dev/null 2>&1 || true
-          git add test.log
-          git commit -m "test log for $GITHUB_SHA"
-          git push -f origin ci-log
+          B64=$(base64 -w0 test.log)
+          SHA=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN"             "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log"             | sed -n 's/.*"sha":"\([0-9a-f]*\)".*//p')
+          ARGS="{\"message\":\"test log $GITHUB_SHA\",\"content\":\"$B64\",\"branch\":\"ci-log\""
+          if [ -n "$SHA" ]; then ARGS="$ARGS,\"sha\":\"$SHA\""; fi
+          curl -s -X PUT -H "Authorization: Bearer $GITHUB_TOKEN"             "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log"             -d "$ARGS}"
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
