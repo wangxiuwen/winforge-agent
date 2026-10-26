@@ -5,6 +5,7 @@ package desk
 import (
 	"runtime"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -112,11 +113,23 @@ func startEdgeIndicator() (func(on bool, controller bool, edge Edge), error) {
 			ready <- err
 			return
 		}
-		procEdgeSetLayered.Call(hwnd, 0, 170, edgeLWAAlpha)
+		procEdgeSetLayered.Call(hwnd, 0, 0, edgeLWAAlpha) // 初始全透明，由渐显接管
 		ready <- nil
 
+		fadeTo := func(target byte) {
+			for alpha := byte(0); alpha <= target; alpha += 24 {
+				procEdgeSetLayered.Call(hwnd, 0, uintptr(alpha), edgeLWAAlpha)
+				time.Sleep(16 * time.Millisecond) // 约一帧
+			}
+			procEdgeSetLayered.Call(hwnd, 0, uintptr(target), edgeLWAAlpha)
+		}
 		for cmd := range cmdCh {
 			if !cmd.on {
+				// 渐隐后隐藏；阻塞条线程最长 ~200ms，可接受。
+				for alpha := int(170); alpha > 0; alpha -= 34 {
+					procEdgeSetLayered.Call(hwnd, 0, uintptr(alpha), edgeLWAAlpha)
+					time.Sleep(16 * time.Millisecond)
+				}
 				procEdgeShowWindow.Call(hwnd, edgeSWHide)
 				continue
 			}
@@ -131,6 +144,7 @@ func startEdgeIndicator() (func(on bool, controller bool, edge Edge), error) {
 			procEdgeSetWindowPos.Call(hwnd, edgeHWNDTopmost,
 				uintptr(x), uintptr(y), uintptr(w), uintptr(h),
 				edgeSWPNoAct|edgeSWPShow)
+			fadeTo(170)
 		}
 	}()
 	if err := <-ready; err != nil {
