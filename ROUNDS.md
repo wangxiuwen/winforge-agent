@@ -39,6 +39,23 @@
 
 ## 轮次记录
 
+### R36（2026-10-27）——**重大修复：Wails 窗口从未真正显示过**
+- ★★根因：Wails v2 构建**必须带 -tags "desktop,production"**，缺 tags 时
+  wails.Run 只弹一个 Error 对话框（"Wails applications will not build
+  without the correct build tags. Please use wails build"）然后停住——
+  窗口永不显示。这正是：
+  ① 用户看到的"弹编译错误"对话框本体（windowsgui 子系统下 panic/弹窗
+    显示为对话框）；
+  ② "打开控制台没反应"（wails.Run 阻塞，WindowShow 无窗口可显示）；
+  ③ 历次"GUI 实机验证"假阴性的原因（此前只验证进程存活+端口监听，
+    而 hub/tray 在 wails.Run 之前启动，全部正常——唯独窗口没了）。
+- 修复：Makefile 的 winforgedesk 两行加 -tags "desktop,production"；
+  实测构建后 Wails 窗口真实显示（wailsWindow visible=True，内存 30MB
+  webview 已加载 vs 坏构建 19MB）。
+- 影响：此前 dist 产物（R19 起）的 GUI 窗口全部不可用，托盘+边缘条+键鼠
+  正常；用户此前所有"窗口相关"的待实测项需在新构建上重新目视。
+- go.mod 的 go 1.26.10 与 x/net v0.60.0 升级保持。
+
 ### R35 续（2026-10-27）
 - **左键点托盘图标 = 打开控制台**：fyne systray v1.12.2 有 SetOnTapped，
   已接线 openConsole（用户此前左键无反应正是缺这个）。
