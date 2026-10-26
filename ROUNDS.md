@@ -39,6 +39,17 @@
 
 ## 轮次记录
 
+### R28（2026-10-27）
+- Config 并发访问加固第三批：PeersSnapshot()（切片快照）+ 标量 getter
+  （NameV/SelfID/ShareEnabledV/HotkeyV/DownloadsDirV/MaxFileBytesV，cfg.mu 内），
+  hub 全部直接字段访问（connectMissing 遍历/Snapshot/遍历分支）换快照——
+  修掉 dialSession 学地址写盘 vs connectMissing 遍历的 DATA RACE（本地 -race
+  实测抓到，R21 修复的同类残留：方法集加锁后外部直接字段访问仍绕锁）。
+- desk 启动日志补版本号（Options.Version ← ldflags main.version），排查用户
+  问题第一线索。GUI 实机验证日志行正确。
+- 例行：vet 自有三包净、-race 全量绿、冒烟通过（一次偶发超时复跑即绿，
+  B 重启后消息通路恢复的收敛窗口波动，非回归）。
+
 ### R27（2026-10-27）
 - 传输条实时速率显示：基于相邻 progress 事件的字节差/时间差 EMA 平滑
   （0.7/0.3），receiving/sending 状态显示"· x MB/s"；终态自动清除。

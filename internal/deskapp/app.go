@@ -35,6 +35,8 @@ type Options struct {
 	Name string
 	// LogWriter 日志去处；为空用 os.Stdout（GUI 入口应传日志文件）。
 	LogWriter io.Writer
+	// Version 版本号（ldflags 注入），写入启动日志——排查用户问题的第一线索。
+	Version string
 	// WindowUI 由 GUI 入口注入的桌面窗口实现（Windows: Wails）；可为 nil。
 	WindowUI func(h *desk.Hub, startHidden bool) error
 	// WindowShow 唤起已隐藏的主窗口（托盘“打开控制台”用）；可为 nil。
@@ -75,7 +77,7 @@ func Run(opts Options) error {
 	if warn != "" {
 		logger.Printf("[warn] %s", warn)
 	}
-	logger.Printf("WinForge Desk 启动：名称=%s ID=%s 配置=%s", cfg.Name, cfg.ID, cfgPath)
+	logger.Printf("WinForge Desk 启动：版本=%s 名称=%s ID=%s 配置=%s", opts.Version, cfg.Name, cfg.ID, cfgPath)
 
 	platform := *desk.NewPlatform(cfg.Hotkey, logger)
 	hub := desk.NewHub(cfg, cfgPath, platform, logger)

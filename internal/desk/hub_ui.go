@@ -34,8 +34,9 @@ type PeerView struct {
 func (h *Hub) Snapshot() map[string]interface{} {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	peers := make([]PeerView, 0, len(h.cfg.Peers))
-	for _, p := range h.cfg.Peers {
+	allPeers := h.cfg.PeersSnapshot()
+	peers := make([]PeerView, 0, len(allPeers))
+	for _, p := range allPeers {
 		_, online := h.sessions[p.ID]
 		peers = append(peers, PeerView{ID: p.ID, Name: p.Name, Position: p.Position,
 			Enabled: p.Enabled, Online: online, Addr: p.Addr})

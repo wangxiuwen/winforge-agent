@@ -245,6 +245,21 @@ func (c *Config) SetPeerEnabled(path, id string, on bool) error {
 	return fmt.Errorf("没有配对设备 %s", id)
 }
 
+// PeersSnapshot 返回配对列表的并发安全快照（外部直接遍历 Peers 字段会 race）。
+func (c *Config) PeersSnapshot() []Peer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]Peer(nil), c.Peers...)
+}
+
+// 快照 getter：hub 各 goroutine 读取标量配置的并发安全入口。
+func (c *Config) NameV() string         { c.mu.Lock(); defer c.mu.Unlock(); return c.Name }
+func (c *Config) SelfID() string        { c.mu.Lock(); defer c.mu.Unlock(); return c.ID }
+func (c *Config) ShareEnabledV() bool   { c.mu.Lock(); defer c.mu.Unlock(); return c.ShareEnabled }
+func (c *Config) HotkeyV() string       { c.mu.Lock(); defer c.mu.Unlock(); return c.Hotkey }
+func (c *Config) DownloadsDirV() string { c.mu.Lock(); defer c.mu.Unlock(); return c.DownloadsDir }
+func (c *Config) MaxFileBytesV() int64  { c.mu.Lock(); defer c.mu.Unlock(); return c.MaxFileBytes }
+
 // newID 生成 16 字节随机 hex。
 func newID() (string, error) {
 	b := make([]byte, 16)

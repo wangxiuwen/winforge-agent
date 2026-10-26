@@ -14,6 +14,9 @@ import (
 	"github.com/wangxiuwen/winforge-agent/internal/deskapp"
 )
 
+// version 由 Makefile 的 -ldflags "-X main.version=..." 注入。
+var version = "dev"
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "autostart" {
 		if err := runAutostart(os.Args[2:]); err != nil {
@@ -41,6 +44,7 @@ func main() {
 	}
 
 	err := deskapp.Run(deskapp.Options{
+		Version:     version,
 		ConfigPath:  *configPath,
 		UIMode:      *uiMode,
 		NoTray:      *noTray,
