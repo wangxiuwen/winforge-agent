@@ -39,6 +39,19 @@
 
 ## 轮次记录
 
+### R22（2026-10-27）
+- CI 排查继续但遭遇通道墙：contents API 404（匿名限流伪装）、raw CDN 缓存、
+  step summary 匿名不回显。**已知确定事实**：CI 在 ubuntu 的 test 步失败；
+  b1b5d55（race 修复前）的日志证实过 DATA RACE；race 修复（R21）本地稳定
+  且多轮全绿；**修复后的 CI 失败输出未获取到**——无法区分是残余 race 还是
+  CI runner（弱机+race 慢）上的时序超时。
+- **待用户动作（二选一，2 分钟）**：
+  a) 网页打开 https://github.com/wangxiuwen/winforge-agent/actions 前两个
+     失败 run 的 test job 日志，把 "--- FAIL" 附近几行发来；
+  b) 或本机 `gh auth login` 走一次设备码授权，之后我能自助取。
+- 收尾判断：不再盲改产品代码。本地全链门禁（race×多轮+冒烟）全绿，
+  真实使用以真机实测为准。
+
 ### R21 续（CI 排查闭环，2026-10-27）
 - CI 失败日志经 ci-log 分支取回：**真 race——Config.UpPeer 写 Peers 切片 vs
   无锁 cfg.Peer() 读并发**（dialSession 学地址写盘 vs accept 读）。修复：
