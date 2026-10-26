@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -836,7 +837,7 @@ func TestUICommandBoundaries(t *testing.T) {
 	a.TransferRespond("not-hex", true)
 	a.ChatHistory("../../etc/passwd") // 非法 ID 不应触碰文件系统
 	a.PairRespond("ghost", true)
-a.PairConfirmOut(true)
+	a.PairConfirmOut(true)
 
 	// 控制命令：未配对对端。
 	if err := a.TakeControl("ghost", 0.5); err == nil {
@@ -894,5 +895,55 @@ func TestChatBidirectional(t *testing.T) {
 	}
 	if len(a.ChatHistory(peerViewsBID(b))) != 1 {
 		t.Fatal("A 端历史缺失")
+	}
+}
+
+// TestAddrLearning 配对后应答方从 state 消息学到主动方地址：
+// 即使 discovery 不可用（无 presence），断线后双方都能主动回连。
+func TestAddrLearning(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	aSelfID := peerViewsBID(a) // A 自己的 ID（B 视角的对端）
+
+	// B 的 peer 记录应已学到 A 的地址（A 的控制端口）。
+	waitFor(t, 5*time.Second, "B 学到 A 的地址", func() bool {
+		for _, p := range peerViews(b) {
+			if p.ID == aSelfID && p.Addr != "" {
+				return true
+			}
+		}
+		return false
+	})
+	// 学到的端口应是 A 的控制端口。
+	wantPort := a.ControlPort()
+	got := ""
+	for _, p := range peerViews(b) {
+		if p.ID == aSelfID {
+			got = p.Addr
+		}
+	}
+	if !strings.HasSuffix(got, ":"+strconv.Itoa(wantPort)) {
+		t.Fatalf("学到的地址端口不对: got=%q want=*:%d", got, wantPort)
+	}
+	// 断开 → B 现在能主动回连（而不是只能等 A）。
+	b.mu.Lock()
+	s := b.sessions[aSelfID]
+	b.mu.Unlock()
+	_ = s.conn.Close()
+	waitFor(t, 15*time.Second, "断线后自动重连", func() bool {
+		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
+	})
+	var chatErr error
+	for i := 0; i < 20; i++ {
+		chatErr = a.SendChat(peerViews(a)[0].ID, "回连后消息")
+		if chatErr == nil {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if chatErr != nil {
+		t.Fatalf("回连后发消息: %v", chatErr)
 	}
 }

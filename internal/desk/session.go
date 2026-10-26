@@ -22,6 +22,9 @@ type wireMsg struct {
 	Name         string `json:"name,omitempty"`
 	ShareEnabled *bool  `json:"share_enabled,omitempty"`
 	Controlling  string `json:"controlling,omitempty"` // 对方正控制的对端 ID，空为空闲
+	// Port 是对端的控制监听端口（state 消息）：应答方借此学到主动方地址，
+	// discovery 不可用时也能主动回连。
+	Port int `json:"port,omitempty"`
 
 	// chat
 	Text string `json:"text,omitempty"`
@@ -295,7 +298,8 @@ func (s *Session) serve() {
 	go s.keepalive()
 	share := s.hub.cfg.ShareEnabled
 	name := s.hub.cfg.Name
-	_ = s.sendJSON(wireMsg{T: msgState, Name: name, ShareEnabled: &share, Controlling: s.hub.controllingPeerID()})
+	_ = s.sendJSON(wireMsg{T: msgState, Name: name, ShareEnabled: &share,
+		Controlling: s.hub.controllingPeerID(), Port: s.hub.ControlPort()})
 	for {
 		_ = s.conn.SetReadDeadline(time.Now().Add(dropAfter))
 		typ, sealed, err := readFrame(s.conn)

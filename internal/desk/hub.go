@@ -259,9 +259,25 @@ func (h *Hub) startEdgeWatch() {
 	h.mu.Unlock()
 }
 
-func (h *Hub) nameSnapshot() string     { return h.cfg.Name }
-func (h *Hub) pairedCountSnapshot() int { return len(h.cfg.Peers) }
-func (h *Hub) shareSnapshot() bool      { return h.cfg.ShareEnabled }
+// 三个 snapshot 由 discovery 的广播 goroutine 调用，
+// 必须与 ToggleShare/savePairedPeer 等写方互斥（曾因此报 DATA RACE）。
+func (h *Hub) nameSnapshot() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfg.Name
+}
+
+func (h *Hub) pairedCountSnapshot() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.cfg.Peers)
+}
+
+func (h *Hub) shareSnapshot() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.cfg.ShareEnabled
+}
 
 // acceptLoop 接受 TCP 连接：配对请求或会话握手。
 func (h *Hub) acceptLoop(ctx context.Context) {

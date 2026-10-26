@@ -39,6 +39,19 @@
 
 ## 轮次记录
 
+### R12（2026-10-26）
+- 对端地址学习：state 消息携带本机控制监听端口，应答方从入站连接的对端 IP +
+  声明端口学到主动方地址并落盘（变化才写）。之前应答方 peer.Addr 永远为空、
+  只能靠 discovery 回连——discovery 被 AP 隔离/UDP 被禁时单向失能。
+- 测试 TestAddrLearning：断言 B 学到 "IP:A控制端口"；断线回连行为由
+  TestHubReconnectAfterDrop 覆盖（B→A 双端并发拨号的重连窗口在 -race 下
+  抖动大，套件内不稳定，此处不重复断言）。
+- 修一个真 DATA RACE：discovery 广播 goroutine 经 nameSnapshot/pairedCountSnapshot/
+  shareSnapshot 无锁读 cfg 字段，与 ToggleShare 等写方并发——三函数补 hub.mu。
+- 测试 ID 视角又错两次（aID 混用"自己 ID/对端 ID"两个语义）——双端测试里
+  建议一律显式命名 aSelfID/bID，别用单一 aID。
+- -race 连跑两遍全绿 + 冒烟通过。
+
 ### R11（2026-10-26）
 - README 真实截图：screenshot_desk.py 起双实例→配对→双向聊天→5MB 文件传输完成→
   无头 Chrome(--virtual-time-budget) 截控制台共享页与传输页，入 docs/ 并嵌 README。

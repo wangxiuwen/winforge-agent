@@ -3,6 +3,8 @@ package desk
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +44,9 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 			s.peerShare = *m.ShareEnabled
 		}
 		s.peerCtl = m.Controlling
+		if m.Port > 0 && m.Port <= 65535 {
+			h.learnPeerAddr(s, m.Port)
+		}
 		h.emitState()
 	case msgChat:
 		if len(m.Text) == 0 || len(m.Text) > maxChatLength {
@@ -407,6 +412,28 @@ func (h *Hub) CancelTransfer(fidHex string) {
 		return
 	}
 	h.mu.Unlock()
+}
+
+// learnPeerAddr 从入站会话学对端监听地址：入站连接的对端 IP + 对端声明的
+// 监听端口。地址变化才写盘，避免每次 state 消息都动配置文件。
+func (h *Hub) learnPeerAddr(s *Session, port int) {
+	tcp, ok := s.conn.RemoteAddr().(*net.TCPAddr)
+	if !ok || tcp.IP == nil {
+		return
+	}
+	addr := net.JoinHostPort(tcp.IP.String(), fmt.Sprint(port))
+	h.mu.Lock()
+	peer, ok := h.cfg.Peer(s.peer.ID)
+	if !ok || peer.Addr == addr {
+		h.mu.Unlock()
+		return
+	}
+	peer.Addr = addr
+	err := h.cfg.UpPeer(h.cfgPath, peer)
+	h.mu.Unlock()
+	if err == nil {
+		h.wakeSessions() // 新地址让本端也具备主动回连能力
+	}
 }
 
 // markTempUpload 登记浏览器上传产生的临时文件，传输结束后删除。
