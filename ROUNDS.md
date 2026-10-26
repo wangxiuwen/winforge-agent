@@ -39,6 +39,13 @@
 
 ## 轮次记录
 
+### R21（2026-10-27）
+- ★流程修复：发现 desk 分支的 CI 从未运行——workflow 只触发 main 的 push 和
+  PR，此前 20 轮 push 全部只有本地门禁。将 desk 加入 push 触发分支，
+  本次 push 起 CI（test -race / vet / govulncheck / 交叉编译演练）即开始
+  对 desk 分支生效；实测质量门禁本地已全绿，预期 CI 绿。
+- 尝试过开 draft PR 触发（API 需认证 401，gh token 失效）走不通后改此方案。
+
 ### R20（2026-10-27）
 - 稳态巡检：build/vet/race 全绿、冒烟通过、工作树干净（dist 已被 gitignore，
   无杂物文件）。无代码变更。
