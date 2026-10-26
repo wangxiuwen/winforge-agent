@@ -48,6 +48,10 @@
   raw.githubusercontent.com 匿名可读——以后 CI 红了无需凭证即可诊断。
 - 诊断链路：加 desk 触发→失败→step summary 匿名不可见→artifact 要认证→
   最终 git 推日志分支成功。本地 race 全量绿 + 冒烟通过，待 CI 复验。
+- 遗留：修复 commit 3737579 的 CI 复验未完成——诊断通道逐个受限
+  （step summary 匿名 API 不回显、artifact 需认证、GitHub API 匿名限流 60/h
+  已耗尽、ci-log 二次推送结果未核实）。下轮首选：限流重置后查 3737579 的
+  run 结论；若仍受限，gh auth login 刷新凭证或请用户网页查看。
 
 ### R21（2026-10-27）
 - ★流程修复：发现 desk 分支的 CI 从未运行——workflow 只触发 main 的 push 和
