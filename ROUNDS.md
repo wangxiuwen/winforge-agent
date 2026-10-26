@@ -39,6 +39,16 @@
 
 ## 轮次记录
 
+### R37（2026-10-27）
+- ★端到端 UI 交互首次真机验证成功：UIA 读取 wailsWindow 内部真实渲染的
+  前端元素（标题/空闲状态/键鼠共享 CheckBox/三个 tab/设备文案），并真实
+  点击"传输"tab——聊天输入框、发送按钮、清空记录、文件区、打开接收目录
+  全部真实渲染。WebView2 内容 UIA 可读需走查两遍触发 Chromium 辅助功能。
+- 意义：此前 36 轮的"端到端"只到 HTTP 层冒烟，窗口内 UI 交互从未验证过
+  （受 R36 tags bug 影响）。现在 UIA 脚本可做端到端 UI 回归（配对弹窗、
+  发消息、传输进度、控制按钮等均可自动化点击验证）。
+- 本轮无代码变更（只读验证）。
+
 ### R36（2026-10-27）——**重大修复：Wails 窗口从未真正显示过**
 - ★★根因：Wails v2 构建**必须带 -tags "desktop,production"**，缺 tags 时
   wails.Run 只弹一个 Error 对话框（"Wails applications will not build
