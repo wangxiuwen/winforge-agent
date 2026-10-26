@@ -39,6 +39,18 @@
 
 ## 轮次记录
 
+### R24（2026-10-27）——**CI 首绿** 🎉
+- desk 分支的 GitHub Actions **首次全绿**（run 40385650266 系列，HEAD 2974faa）：
+  test -race ✓ / vet ✓ / govulncheck ✓（go 1.26.10 + x/net v0.60.0）/ release ✓。
+- 诊断过程还原：上一轮 dbb8c66 的 test 失败是 **runner 时序偶发**（本 round
+  宽诊断通道下同配置转绿），非编译错误非新 race。之前的 race 修复、重试、
+  go/x-net 升级均已生效。
+- workflow 诊断加固沉淀：失败时 HEAD/KEY/TAIL 三段 ::error:: 注解（匿名
+  check-runs API 可读）+ 日志 publish 步骤 continue-on-error（其失败不再
+  干扰主门禁）+ publish HTTP 码注解。
+- 结论：质量门禁四件套（本地 -race/冒烟/CI test/CI govulncheck）首次全部
+  真实在线运行且绿。
+
 ### R23 续（R24 前置修复，2026-10-27）
 - TestDialRaceConverges 的 SendChat 撞仲裁替换瞬态窗口且无重试（0.11s 即
   Fatal）——补 20×250ms 重试（与 TestAddrLearning 同模式）。CI-DIAG 注解通道
