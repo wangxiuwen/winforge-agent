@@ -47,6 +47,10 @@
   （发现→配对→会话→消息→3MB 文件→控制状态机）。
 - 新增 TestHubReconnectAfterDrop：强制断 TCP → 3s 退避重连 → 重连后消息可达。
 - 注意点：ListenPacket 返回 net.PacketConn，要断言成 *net.UDPConn 才有 ReadFromUDP。
+- 追加修复（同轮二批）：重连切换窗口期调用方可能拿到"已关未清理"的旧会话
+  （conn 已 Close 但 sessionClosed 还没跑完）→ 新增 Session.Alive()，所有会话
+  查找点（SendChat/SendFile/TakeControl/connectMissing）先验存活；重连测试改为
+  容忍一次瞬态失败（20×250ms 重试），-race 单跑与 -count=2 全绿。
 
 ### R1（2026-10-26）
 - 新增 internal/desk（~3200 行）：proto/crypto/pairing/session/hub(_msg/_ctl/_ui)/discovery/

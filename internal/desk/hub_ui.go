@@ -250,7 +250,7 @@ func (h *Hub) SendChat(peerID, text string) error {
 	h.mu.Lock()
 	s := h.sessions[peerID]
 	h.mu.Unlock()
-	if s == nil {
+	if s == nil || !s.Alive() {
 		return errNotConnected
 	}
 	if err := s.sendJSON(wireMsg{T: msgChat, Text: text, Ts: time.Now().UnixMilli()}); err != nil {
@@ -271,7 +271,7 @@ func (h *Hub) SendFile(peerID, path string) error {
 	}
 	h.mu.Lock()
 	s := h.sessions[peerID]
-	if s == nil {
+	if s == nil || !s.Alive() {
 		h.mu.Unlock()
 		_ = sf.Close()
 		return errNotConnected

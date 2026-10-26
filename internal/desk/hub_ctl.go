@@ -65,7 +65,7 @@ func (h *Hub) TakeControl(peerID string, yRatio float64) error {
 		return errBusy
 	}
 	s := h.sessions[peerID]
-	if s == nil {
+	if s == nil || !s.Alive() {
 		return errNotConnected
 	}
 	peer, ok := h.cfg.Peer(peerID)

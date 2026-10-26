@@ -121,6 +121,16 @@ type Session struct {
 // PeerID 返回对端 ID。
 func (s *Session) PeerID() string { return s.peer.ID }
 
+// Alive 报告会话是否仍可收发（重连切换窗口期内旧会话已死但未及清理）。
+func (s *Session) Alive() bool {
+	select {
+	case <-s.done:
+		return false
+	default:
+		return true
+	}
+}
+
 // PeerName 返回对端最新名字。
 func (s *Session) PeerName() string {
 	if s.peerName != "" {

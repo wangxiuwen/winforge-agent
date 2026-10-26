@@ -364,10 +364,10 @@ func (h *Hub) connectMissing() {
 			continue
 		}
 		h.mu.Lock()
-		_, live := h.sessions[p.ID]
+		live := h.sessions[p.ID]
 		last := h.lastTry[p.ID]
 		h.mu.Unlock()
-		if live || time.Since(last) < 3*time.Second {
+		if (live != nil && live.Alive()) || time.Since(last) < 3*time.Second {
 			continue
 		}
 		h.mu.Lock()

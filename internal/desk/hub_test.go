@@ -381,9 +381,17 @@ func TestHubReconnectAfterDrop(t *testing.T) {
 	waitFor(t, 15*time.Second, "断线后自动重连", func() bool {
 		return len(peerViews(a)) == 1 && peerViews(a)[0].Online
 	})
-	// 重连后的会话能继续收发。
-	if err := a.SendChat(peerB.ID, "重连后的消息"); err != nil {
-		t.Fatalf("重连后发消息: %v", err)
+	// 重连后的会话能继续收发（切换窗口期可能出现一次瞬态失败，允许重试）。
+	var chatErr error
+	for i := 0; i < 20; i++ {
+		chatErr = a.SendChat(peerB.ID, "重连后的消息")
+		if chatErr == nil {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	if chatErr != nil {
+		t.Fatalf("重连后发消息: %v", chatErr)
 	}
 	waitFor(t, 5*time.Second, "重连后消息送达", func() bool {
 		for _, d := range emitterOf(b).all() {
