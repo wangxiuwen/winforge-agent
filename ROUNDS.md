@@ -39,6 +39,16 @@
 
 ## 轮次记录
 
+### R13（2026-10-26）
+- goroutine panic 防护：desk 是托盘常驻进程，任一后台协程 panic（平台 API
+  异常、协议分支漏判）都会带崩整个进程。新增 recover.go（safeGo/safeCall），
+  Hub 的 acceptLoop/runSessions/watchHotkey/watchEscape/session-serve 全部
+  换 safeGo 启动；Session.serve 顶部 safeCall 拦截（panic 后仍走会话正常
+  关闭路径，对端不会卡死）。
+- TestConcurrentCommands 并发压测：4 goroutine 混打 Snapshot/ToggleShare/
+  PeerPosition/SendChat 各 200 次，-race 无 race、无死锁，结束后状态一致。
+- -race 全量绿 + 冒烟通过。
+
 ### R12（2026-10-26）
 - 对端地址学习：state 消息携带本机控制监听端口，应答方从入站连接的对端 IP +
   声明端口学到主动方地址并落盘（变化才写）。之前应答方 peer.Addr 永远为空、

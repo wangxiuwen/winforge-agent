@@ -291,6 +291,8 @@ func (s *Session) handshakeFrom(hello pairFrame, psk []byte) error {
 
 // serve 是会话主循环：读帧 → 分发；同时负责保活与超时。
 func (s *Session) serve() {
+	// 拦截 serve 内部 panic：会话异常时走正常关闭路径而不是带崩进程。
+	defer safeCall(s.hub.log, "session", func() {})
 	defer func() {
 		s.close()
 		s.hub.sessionClosed(s)

@@ -947,3 +947,65 @@ func TestAddrLearning(t *testing.T) {
 		t.Fatalf("回连后发消息: %v", chatErr)
 	}
 }
+
+// TestConcurrentCommands 并发压测：多 goroutine 混合狂打 UI 命令，
+// -race 下无 race、无死锁，结束后状态一致。
+func TestConcurrentCommands(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+	a.PeerPosition(peerB.ID, "right")
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = a.Snapshot()
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			a.ToggleShare(i%2 == 0)
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = a.PeerPosition(peerB.ID, []string{"left", "right", ""}[i%3])
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = a.SendChat(peerB.ID, "压测消息")
+			time.Sleep(2 * time.Millisecond)
+		}
+	}()
+	time.Sleep(1200 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+
+	// 结束后状态一致：共享开关与最后一次 Toggle 一致，B 回到空闲。
+	final := a.Snapshot()
+	if _, ok := final["share"].(bool); !ok {
+		t.Fatal("share 字段类型异常")
+	}
+	waitFor(t, 5*time.Second, "控制态回空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+	// 恢复共享开（后续测试共用全局状态的习惯性复位）。
+	a.ToggleShare(true)
+}

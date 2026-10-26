@@ -222,7 +222,6 @@ func (h *Hub) Start(ctx context.Context) error {
 	}
 	h.listener = ln
 	h.log.Printf("desk 控制端口 %d，ID %s，名称 %s", ln.Addr().(*net.TCPAddr).Port, h.cfg.ID, h.cfg.Name)
-	go h.acceptLoop(ctx)
 
 	discPort := h.cfg.DiscoveryPort
 	controlPort := func() int { return ln.Addr().(*net.TCPAddr).Port }
@@ -237,9 +236,10 @@ func (h *Hub) Start(ctx context.Context) error {
 	h.disc.StartPruner(ctx, 2*time.Second, 7*time.Second)
 
 	h.loadChatHistory()
-	go h.runSessions(ctx)
-	go h.watchHotkey(ctx)
-	go h.watchEscape(ctx)
+	safeGo(h.log, "runSessions", func() { h.runSessions(ctx) })
+	safeGo(h.log, "acceptLoop", func() { h.acceptLoop(ctx) })
+	safeGo(h.log, "watchHotkey", func() { h.watchHotkey(ctx) })
+	safeGo(h.log, "watchEscape", func() { h.watchEscape(ctx) })
 	h.startEdgeWatch()
 	return nil
 }
@@ -337,7 +337,7 @@ func (h *Hub) acceptSession(conn net.Conn, hello pairFrame) {
 	// 解除 accept 阶段的 10s 截止时间，长连接交给 serve 的读写策略。
 	_ = conn.SetDeadline(time.Time{})
 	h.registerSession(s)
-	s.serve()
+	safeGo(h.log, "session-serve", s.serve)
 }
 
 // registerSession 登记会话（同一对端只保留最新一条）。
@@ -445,7 +445,7 @@ func (h *Hub) dialSession(p Peer, addr string) {
 	h.registerSession(s)
 	// serve 是永不返回的读循环，必须在独立 goroutine 里跑，
 	// 否则 runSessions 的补连循环会被第一条会话永久卡死（多对端拨号失效）。
-	go s.serve()
+	safeGo(h.log, "session-serve", s.serve)
 }
 
 // sessionTo 并发安全的存活会话查询。
