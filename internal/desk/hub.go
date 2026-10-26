@@ -136,12 +136,13 @@ type Hub struct {
 	emittersMu sync.Mutex
 	emitters   []Emitter
 
-	edgeStop func()
-	lastTry  map[string]time.Time
-	wake     chan struct{}
-	started  time.Time
-	uiToken  string
-	uiPort   int
+	edgeStop  func()
+	lastTry   map[string]time.Time
+	dialFails map[string]int // 连续拨号失败次数（指数退避 3s→30s 封顶）
+	wake      chan struct{}
+	started   time.Time
+	uiToken   string
+	uiPort    int
 }
 
 // NewHub 构造。
@@ -162,11 +163,19 @@ func NewHub(cfg *Config, cfgPath string, platform Platform, logger *log.Logger) 
 		tempUploads: map[string]bool{},
 		chatHistory: map[string][]ChatMsg{},
 		lastTry:     map[string]time.Time{},
+		dialFails:   map[string]int{},
 		wake:        make(chan struct{}, 1),
 		started:     time.Now(),
 		uiToken:     hex.EncodeToString(randomBytes(24)),
 	}
 }
+
+// 拨号退避参数：双端并发拨号场景下被仲裁淘汰的一方会反复重拨，
+// 指数退避把这种无害但浪费的循环压到低频；会话建立成功后归零。
+const (
+	dialBackoffBase = 3 * time.Second
+	dialBackoffMax  = 30 * time.Second
+)
 
 // wakeSessions 立即触发一轮补连（配对/启用后立刻接上，不等周期）。
 func (h *Hub) wakeSessions() {
@@ -402,12 +411,18 @@ func (h *Hub) connectMissing() {
 		h.mu.Lock()
 		live := h.sessions[p.ID]
 		last := h.lastTry[p.ID]
+		fails := h.dialFails[p.ID]
 		h.mu.Unlock()
-		if (live != nil && live.Alive()) || time.Since(last) < 3*time.Second {
+		backoff := dialBackoffBase << fails
+		if backoff > dialBackoffMax {
+			backoff = dialBackoffMax
+		}
+		if (live != nil && live.Alive()) || time.Since(last) < backoff {
 			continue
 		}
 		h.mu.Lock()
 		h.lastTry[p.ID] = time.Now()
+		h.dialFails[p.ID] = fails + 1
 		h.mu.Unlock()
 		addr := p.Addr
 		if addr == "" {
@@ -451,6 +466,9 @@ func (h *Hub) dialSession(p Peer, addr string) {
 	}
 	h.mu.Unlock()
 	h.log.Printf("[info] 已连接 %s（%s）", p.Name, addr)
+	h.mu.Lock()
+	delete(h.dialFails, p.ID)
+	h.mu.Unlock()
 	h.registerSession(s)
 	// serve 是永不返回的读循环，必须在独立 goroutine 里跑，
 	// 否则 runSessions 的补连循环会被第一条会话永久卡死（多对端拨号失效）。
