@@ -39,6 +39,13 @@
 
 ## 轮次记录
 
+### R23 续（R24 前置修复，2026-10-27）
+- TestDialRaceConverges 的 SendChat 撞仲裁替换瞬态窗口且无重试（0.11s 即
+  Fatal）——补 20×250ms 重试（与 TestAddrLearning 同模式）。CI-DIAG 注解通道
+  已打通：::error:: 行经 check-runs API 匿名可读（R22 四条失败通道之外的
+  第五条，也是第一条真正闭环的）。
+- 单独 count=3 全过、全量 race 绿、冒烟过。
+
 ### R23（2026-10-27）
 - **CI 真相确认**：test 步已过（R21 race 修复在 CI 生效），CI 红的原因 =
   govulncheck 报 x/net@v0.56.0 的 5 条 HTTP/2 公告（GO-2026-6617/6612/6611/6610/6603，

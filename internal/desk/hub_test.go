@@ -1045,11 +1045,21 @@ func TestDialRaceConverges(t *testing.T) {
 	waitFor(t, 20*time.Second, "双方收敛在线", func() bool {
 		return peerViews(a)[0].Online && peerViews(b)[0].Online
 	})
-	// 双向消息都通。
-	if err := a.SendChat(bSelf, "并发后 A2B"); err != nil {
+	// 双向消息都通（仲裁替换窗口内可能瞬态失败，带重试）。
+	tryChat := func(from, to *Hub, text string) error {
+		var err error
+		for i := 0; i < 20; i++ {
+			if err = from.SendChat(to.Snapshot()["self"].(map[string]interface{})["id"].(string), text); err == nil {
+				return nil
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+		return err
+	}
+	if err := tryChat(a, b, "并发后 A2B"); err != nil {
 		t.Fatalf("A→B: %v", err)
 	}
-	if err := b.SendChat(aSelf, "并发后 B2A"); err != nil {
+	if err := tryChat(b, a, "并发后 B2A"); err != nil {
 		t.Fatalf("B→A: %v", err)
 	}
 	waitFor(t, 5*time.Second, "双向消息送达", func() bool {
