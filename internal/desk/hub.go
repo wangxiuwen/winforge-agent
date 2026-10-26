@@ -450,6 +450,7 @@ func (h *Hub) dialSession(p Peer, addr string) {
 		_ = h.cfg.UpPeer(h.cfgPath, peer)
 	}
 	h.mu.Unlock()
+	h.log.Printf("[info] 已连接 %s（%s）", p.Name, addr)
 	h.registerSession(s)
 	// serve 是永不返回的读循环，必须在独立 goroutine 里跑，
 	// 否则 runSessions 的补连循环会被第一条会话永久卡死（多对端拨号失效）。
