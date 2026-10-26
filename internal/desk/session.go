@@ -108,20 +108,20 @@ func getI32(b []byte) int32 { return int32(getU32(b)) }
 
 // Session 一条与对端的加密会话。
 type Session struct {
-	hub       *Hub
-	peer      Peer
-	conn      net.Conn
-	keys      *sessionKeys
+	hub  *Hub
+	peer Peer
+	conn net.Conn
+	keys *sessionKeys
 	// initiatorID 是拨号方的 ID：主动连接=本机 ID，被动接受=对端 ID。
 	// 双端并发拨号时用它做唯一性仲裁（保留 initiatorID 较小者）。
 	initiatorID string
-	sendMu    sync.Mutex
-	peerName  string
-	peerShare bool
-	peerCtl   string // 对端正在控制的第三方
-	lastRecv  atomic.Int64
-	closed    atomic.Bool
-	done      chan struct{}
+	sendMu      sync.Mutex
+	peerName    string
+	peerShare   bool
+	peerCtl     string // 对端正在控制的第三方
+	lastRecv    atomic.Int64
+	closed      atomic.Bool
+	done        chan struct{}
 }
 
 // PeerID 返回对端 ID。
