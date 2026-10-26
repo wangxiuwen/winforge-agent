@@ -342,6 +342,35 @@ func (h *Hub) watchHotkey(ctx context.Context) {
 	}
 }
 
+// watchEscape 被控端 Esc 快捷交还：被控制时按 Esc 立即拿回键鼠。
+func (h *Hub) watchEscape(ctx context.Context) {
+	if h.platform.Escape == nil {
+		return
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-h.platform.Escape:
+			h.mu.Lock()
+			role := h.ctl.Role
+			peer := h.ctl.Peer
+			h.mu.Unlock()
+			if role == roleControlled {
+				h.ReleaseControl(-1)
+				h.toast("info", "已按 Esc 交还控制"+controlPeerSuffix(peer))
+			}
+		}
+	}
+}
+
+func controlPeerSuffix(peer string) string {
+	if peer == "" {
+		return ""
+	}
+	return "（" + peer + "）"
+}
+
 // hotkeyPressed 热键：空闲→控制对端；控制中→结束；被控→拿回。
 func (h *Hub) hotkeyPressed() {
 	h.mu.Lock()

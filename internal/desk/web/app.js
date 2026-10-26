@@ -16,7 +16,8 @@ function makeBridge() {
           pairStart: b.PairStart, pairRespond: b.PairRespond, pairOutConfirm: b.PairOutConfirm,
           peerPosition: b.PeerPosition, peerToggle: b.PeerToggle, peerRemove: b.PeerRemove,
           sendChat: b.SendChat, sendFile: b.SendFile, pickAndSendFile: b.PickAndSendFile,
-          transferRespond: b.TransferRespond, takeControl: b.TakeControl, releaseControl: b.ReleaseControl,
+          transferRespond: b.TransferRespond, cancelTransfer: b.CancelTransfer,
+          takeControl: b.TakeControl, releaseControl: b.ReleaseControl,
           toggleShare: b.ToggleShare, openPath: b.OpenPath,
         };
         const fn = map[cmd];
@@ -221,7 +222,7 @@ function renderTransfers() {
     const el = document.createElement("div");
     el.className = "tr-item";
     const stateText = { offer: "等待你确认", accepted: "已接受", receiving: "接收中", sending: "发送中",
-      sent: "已发出", done: "已完成", failed: "失败", rejected: "被拒收" }[t.state] || t.state;
+      sent: "已发出", done: "已完成", failed: "失败", rejected: "被拒收", cancelled: "已取消" }[t.state] || t.state;
     el.innerHTML = `<div class="row">
         <span class="name">${t.dir === "in" ? "↓ " : "↑ "}${esc(t.name || "")}</span>
         <span class="grow"></span><span class="state ${t.state}">${stateText} ${t.size ? fmtSize(t.recv || 0) + "/" + fmtSize(t.size) : ""}</span>
@@ -231,6 +232,7 @@ function renderTransfers() {
         <span class="grow"></span>
         ${t.state === "offer" ? `<button data-act="tr-yes" data-id="${id}">接收</button>
           <button class="danger" data-act="tr-no" data-id="${id}">拒收</button>` : ""}
+        ${(t.state === "receiving" || t.state === "sending") ? `<button class="danger" data-act="tr-cancel" data-id="${id}">取消</button>` : ""}
         ${t.state === "done" && t.path ? `<button class="alt" data-act="open" data-path="${esc(t.path)}">打开</button>` : ""}
       </div>`;
     box.appendChild(el);
@@ -261,6 +263,7 @@ document.body.addEventListener("click", (e) => {
   if (act === "unctl") bridge.call("releaseControl").catch(() => {});
   if (act === "tr-yes") bridge.call("transferRespond", id, true).catch(() => {});
   if (act === "tr-no") bridge.call("transferRespond", id, false).catch(() => {});
+  if (act === "tr-cancel") bridge.call("cancelTransfer", id).catch(() => {});
   if (act === "open") bridge.call("openPath", btn.dataset.path).catch(err => toast("error", String(err)));
 });
 

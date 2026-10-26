@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,6 +28,8 @@ type Platform struct {
 	WatchEdges func(cb func(edge Edge, yRatio float64)) (stop func(), err error)
 	// Hotkey 全局热键触发信号（可为 nil）。
 	Hotkey <-chan struct{}
+	// Escape 本机物理 Esc 按下（被控端快捷交还用，可为 nil）。
+	Escape <-chan struct{}
 	// ScreenBounds 本机虚拟屏幕范围。
 	ScreenBounds func() ScreenBounds
 	// CursorPos 当前物理光标位置。
@@ -74,9 +77,11 @@ type outgoingTransfer struct {
 	Size  int64
 	Sent  int64
 	SHA   string
-	State string // offering / sending / done / failed / rejected
+	State string // offering / sending / done / failed / rejected / cancelled
 	Path  string
 	file  *senderFile
+	// cancel 由用户取消置位，发送循环逐块检查。
+	cancel atomic.Bool
 }
 
 type incomingTransfer struct {
@@ -86,9 +91,11 @@ type incomingTransfer struct {
 	Size  int64
 	Recv  int64
 	SHA   string
-	State string // offer / accepted / receiving / done / failed / rejected
+	State string // offer / accepted / receiving / done / failed / rejected / cancelled
 	Path  string
 	file  *incomingFile
+	// lastProgress 上次进度事件时间，用于限频。
+	lastProgress time.Time
 }
 
 // Hub 持有 desk 全部运行状态。
@@ -227,6 +234,7 @@ func (h *Hub) Start(ctx context.Context) error {
 
 	go h.runSessions(ctx)
 	go h.watchHotkey(ctx)
+	go h.watchEscape(ctx)
 	h.startEdgeWatch()
 	return nil
 }

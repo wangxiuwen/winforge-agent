@@ -187,6 +187,8 @@ func (s *uiServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		err = h.SendFile(argString(c.Args, 0), argString(c.Args, 1))
 	case "transferRespond":
 		h.TransferRespond(argString(c.Args, 0), argBool(c.Args, 1))
+	case "cancelTransfer":
+		h.CancelTransfer(argString(c.Args, 0))
 	case "takeControl":
 		err = h.TakeControl(argString(c.Args, 0), -1)
 	case "releaseControl":

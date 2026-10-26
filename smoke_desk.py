@@ -114,7 +114,7 @@ def main():
 
         # 3) 文件（3.5MB 随机数据）
         src = os.path.join(BASE, "payload.bin")
-        data = secrets.token_bytes(3 * 1024 * 1024 + 777)
+        data = secrets.token_bytes(32 * 1024 * 1024 + 777)
         with open(src, "wb") as f:
             f.write(data)
         rpc(a["base"], a["token"], "sendFile", [peer_a, src])
@@ -126,7 +126,7 @@ def main():
         with open(path, "rb") as f:
             got = f.read()
         assert got == data, "内容不一致 %d vs %d" % (len(got), len(data))
-        print("[ok] 文件 3MB 校验一致:", path)
+        print("[ok] 文件 32MB 校验一致:", path)
 
         # 4) 控制状态机（无真实键鼠，走 take/deny 语义）
         # B 关共享 → A take 应被拒

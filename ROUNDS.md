@@ -16,9 +16,9 @@
 - [x] R2 同机双实例发现：UDP SO_REUSEADDR（参考 internal/discovery/reuse_windows.go）
 - [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
 - [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
-- [ ] R2+ 传输增强：取消进行中传输、接收端进度限频、1GB 级大文件
+- [x] R5 传输增强：取消（收发双侧+UI 按钮+对端联动）、接收进度 200ms 限频、32MB 冒烟实测（1GB 靠同一机制，未单独实测）
 - [ ] R2+ UI 打磨：拖拽文件发送、聊天记录持久化（会话级）、多对端消息隔离、连接状态动效
-- [ ] R2+ 控制体验：控制时对端屏幕边缘提示条、光标进入动画、Esc 快捷交还
+- [ ] R2+ 控制体验：控制时对端屏幕边缘提示条、光标进入动画（Esc 快捷交还已完成→见 R5）
 - [ ] R2+ 多对端拓扑（>2 台）：方位矩阵、链式切换
 - [ ] R2+ 性能：输入延迟测量（目标 <30ms 局域网）、移动事件合帧
 - [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
@@ -38,6 +38,21 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R5（2026-10-26）
+- 传输取消全链路：Hub.CancelTransfer（发送侧 CAS 抢取消权后同步清理——offer 阶段
+  发送循环还没启动，必须就地处理；接收侧 abort 半成品+通知对端）；
+  对端 file_abort 事件补发 UI（此前静默清理）；UI 传输条在 sending/receiving
+  状态显示"取消"按钮；HTTP rpc 与 Wails 绑定同步接入。
+- 接收进度事件 200ms 限频（大文件不再刷爆 UI）。
+- Esc 快捷交还：Windows 键盘钩子在非捕获模式下检测物理 Esc（注入键跳过）→
+  Platform.Escape 通道 → 被控端 ReleaseControl + toast。控制器端按 Esc 无副作用。
+- 冒烟升级到 32MB 校验一致（进度限频下的完整传输）。
+- 新增 e2e：TestCancelTransfer（offer 阶段取消，双方 cancelled 且无半成品——
+  回环上"传输中途"取消有时序竞争，取确定性阶段）、TestEscapeReleasesControl。
+- 坑：回环 TCP 上 8MB 瞬间传完，任何"恰好在传输中"的断言都不可靠；
+  取消权用 CompareAndSwap 防止 CancelTransfer 与发送循环双重清理/双发事件。
+- -race 全量绿 + 冒烟全通过。
 
 ### R4（2026-10-26）
 - 桌面运行体抽到 internal/deskapp（不 import Wails）：Options{WindowUI/WindowShow}

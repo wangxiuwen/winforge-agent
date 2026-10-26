@@ -59,6 +59,7 @@ type fakePlatform struct {
 	inj      *fakeInjector
 	capture  chan InputEvent
 	hotkeyCh chan struct{}
+	escapeCh chan struct{}
 	cursor   [2]int32
 }
 
@@ -67,6 +68,7 @@ func newFakePlatform() *fakePlatform {
 		inj:      &fakeInjector{bounds: ScreenBounds{X: 0, Y: 0, W: 1920, H: 1080}},
 		capture:  make(chan InputEvent, 64),
 		hotkeyCh: make(chan struct{}, 1),
+		escapeCh: make(chan struct{}, 1),
 	}
 }
 
@@ -90,6 +92,7 @@ func (f *fakePlatform) toPlatform() Platform {
 			return func() { close(ch) }, nil
 		},
 		Hotkey:       f.hotkeyCh,
+		Escape:       f.escapeCh,
 		ScreenBounds: func() ScreenBounds { return ScreenBounds{X: 0, Y: 0, W: 1920, H: 1080} },
 		CursorPos: func() (int32, int32) {
 			f.mu.Lock()
@@ -403,4 +406,99 @@ func TestHubReconnectAfterDrop(t *testing.T) {
 		}
 		return false
 	})
+}
+
+// TestCancelTransfer 报价阶段取消：双方都到 cancelled，无残留。
+// （回环上大文件瞬间传完，"传输中途"取消存在时序竞争，故取确定性的 offer 阶段。）
+func TestCancelTransfer(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+
+	data := make([]byte, ChunkSize*4)
+	if _, err := rand.Read(data); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(t.TempDir(), "cancelme.bin")
+	if err := os.WriteFile(src, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SendFile(peerB.ID, src); err != nil {
+		t.Fatal(err)
+	}
+	// A 侧出现 offering 事件后立即取消（B 侧 offer 也已登记）。
+	var fid string
+	waitFor(t, 5*time.Second, "A 出现 offering", func() bool {
+		for _, ev := range emitterOf(a).all() {
+			if m, ok := ev.data.(map[string]interface{}); ok && m["dir"] == "out" && m["state"] == "offering" {
+				fid, _ = m["id"].(string)
+				return true
+			}
+		}
+		return false
+	})
+	waitFor(t, 5*time.Second, "B 收到 offer", func() bool {
+		for _, ev := range emitterOf(b).all() {
+			if m, ok := ev.data.(map[string]interface{}); ok && m["dir"] == "in" && m["state"] == "offer" {
+				return true
+			}
+		}
+		return false
+	})
+	a.CancelTransfer(fid)
+	waitFor(t, 5*time.Second, "A 状态变 cancelled", func() bool {
+		for _, ev := range emitterOf(a).all() {
+			if m, ok := ev.data.(map[string]interface{}); ok && m["dir"] == "out" && m["state"] == "cancelled" {
+				return true
+			}
+		}
+		return false
+	})
+	waitFor(t, 5*time.Second, "B 状态变 cancelled", func() bool {
+		for _, ev := range emitterOf(b).all() {
+			if m, ok := ev.data.(map[string]interface{}); ok && m["dir"] == "in" && m["state"] == "cancelled" {
+				return true
+			}
+		}
+		return false
+	})
+	// 双方本地都无半成品文件。
+	for _, h := range []*Hub{a, b} {
+		dir := h.Snapshot()["downloads"].(string)
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			if filepath.Ext(e.Name()) == ".bin" {
+				t.Fatalf("半成品残留: %s", e.Name())
+			}
+		}
+	}
+}
+
+// TestEscapeReleasesControl 被控端 Esc：立即交还。
+func TestEscapeReleasesControl(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	peerB := peerViews(a)[0]
+	if err := a.TakeControl(peerB.ID, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 5*time.Second, "B 进入被控态", func() bool {
+		return b.Snapshot()["control"].(ControlState).Role == roleControlled
+	})
+	// B 端物理 Esc。
+	select {
+	case pb.escapeCh <- struct{}{}:
+	default:
+	}
+	waitFor(t, 5*time.Second, "双方回到空闲", func() bool {
+		return a.Snapshot()["control"].(ControlState).Role == roleIdle &&
+			b.Snapshot()["control"].(ControlState).Role == roleIdle
+	})
+	if pb.inj.Released() == 0 {
+		t.Fatal("交还时应释放按键")
+	}
 }

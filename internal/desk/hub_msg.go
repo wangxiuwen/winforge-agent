@@ -129,10 +129,14 @@ func (h *Hub) onFileAccept(s *Session, m wireMsg) {
 }
 
 // sendTransferChunks 顺序发送文件块；TCP 背压即流控。
+// 取消由 CancelTransfer 统一处理（置位 cancel 并同步清理），这里发现置位即退出。
 func (h *Hub) sendTransferChunks(s *Session, t *outgoingTransfer) {
 	buf := make([]byte, ChunkSize)
 	seq := uint32(0)
 	for {
+		if t.cancel.Load() {
+			return
+		}
 		n, err := t.file.f.Read(buf)
 		if n > 0 {
 			if err := s.sendChunk(t.ID, seq, buf[:n]); err != nil {
@@ -251,7 +255,7 @@ func (h *Hub) onFileDone(s *Session, m wireMsg) {
 	})
 }
 
-// onFileAbort 任一端中止传输。
+// onFileAbort 对端中止了传输（对端取消或对端接收失败）。
 func (h *Hub) onFileAbort(s *Session, m wireMsg) {
 	var id [16]byte
 	if b := unb64(m.FID); len(b) == 16 {
@@ -264,14 +268,26 @@ func (h *Hub) onFileAbort(s *Session, m wireMsg) {
 			t.file.abort()
 			t.file = nil
 		}
+		t.State = "cancelled"
 		delete(h.in, id)
+		h.emit("desk:transfer", map[string]interface{}{
+			"id": hex.EncodeToString(id[:]), "peer": s.PeerName(), "name": t.Name,
+			"dir": "in", "state": "cancelled", "recv": t.Recv, "size": t.Size,
+		})
 	}
 	if t := h.out[id]; t != nil && t.Peer == s.peer.ID {
 		if t.file != nil {
 			_ = t.file.Close()
 			t.file = nil
 		}
+		t.cancel.Store(true)
+		t.State = "cancelled"
 		delete(h.out, id)
+		h.cleanupTempUpload(t.Path)
+		h.emit("desk:transfer", map[string]interface{}{
+			"id": hex.EncodeToString(id[:]), "peer": s.PeerName(), "name": t.Name,
+			"dir": "out", "state": "cancelled", "recv": t.Sent, "size": t.Size,
+		})
 	}
 }
 
@@ -296,8 +312,13 @@ func (h *Hub) handleChunk(s *Session, id [16]byte, seq uint32, data []byte) {
 	t.Recv += int64(len(data))
 	progress := t.Recv
 	size, name := t.Size, t.Name
+	// 进度事件限频：至少间隔 200ms，避免大文件刷爆 UI。
+	shouldEmit := time.Since(t.lastProgress) >= 200*time.Millisecond
+	if shouldEmit {
+		t.lastProgress = time.Now()
+	}
 	h.mu.Unlock()
-	if seq%16 == 0 {
+	if shouldEmit {
 		h.emit("desk:transfer", map[string]interface{}{
 			"id": hex.EncodeToString(id[:]), "peer": s.PeerName(), "name": name,
 			"dir": "in", "state": "receiving", "recv": progress, "size": size,
@@ -321,6 +342,68 @@ func (h *Hub) removeIncompleteLocked(path string) {
 		return
 	}
 	_ = removeFile(path)
+}
+
+// CancelTransfer 用户取消一个进行中的传输（收发两侧都适用）。
+func (h *Hub) CancelTransfer(fidHex string) {
+	raw, err := hex.DecodeString(fidHex)
+	if err != nil || len(raw) != 16 {
+		return
+	}
+	var id [16]byte
+	copy(id[:], raw)
+	// 发送侧：CAS 抢到取消权后同步清理（offer 阶段发送循环尚未启动，必须就地处理）。
+	h.mu.Lock()
+	if t := h.out[id]; t != nil && (t.State == "offering" || t.State == "sending") {
+		if !t.cancel.CompareAndSwap(false, true) {
+			h.mu.Unlock()
+			return
+		}
+		peer := t.Peer
+		if t.file != nil {
+			_ = t.file.Close()
+			t.file = nil
+		}
+		delete(h.out, id)
+		h.mu.Unlock()
+		if s := func() *Session {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			return h.sessions[peer]
+		}(); s != nil && s.Alive() {
+			_ = s.sendJSON(wireMsg{T: msgFileAbort, FID: b64(id[:])})
+		}
+		h.cleanupTempUpload(t.Path)
+		h.emit("desk:transfer", map[string]interface{}{
+			"id": fidHex, "dir": "out", "state": "cancelled",
+		})
+		h.toast("info", "已取消发送 "+t.Name)
+		return
+	}
+	if t := h.in[id]; t != nil && (t.State == "offer" || t.State == "receiving") {
+		peer := t.Peer
+		name := t.Name
+		if t.file != nil {
+			t.file.abort()
+			t.file = nil
+		}
+		t.State = "cancelled"
+		delete(h.in, id)
+		h.mu.Unlock()
+		if s := func() *Session {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			return h.sessions[peer]
+		}(); s != nil {
+			_ = s.sendJSON(wireMsg{T: msgFileAbort, FID: b64(id[:])})
+		}
+		h.emit("desk:transfer", map[string]interface{}{
+			"id": fidHex, "dir": "in", "state": "cancelled",
+		})
+		h.toast("info", "已取消接收 "+name)
+		return
+	}
+	h.mu.Unlock()
 }
 
 // markTempUpload 登记浏览器上传产生的临时文件，传输结束后删除。
