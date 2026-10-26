@@ -40,6 +40,8 @@ func main() {
 		err = runInit(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
+	case "desk":
+		err = runDesk(os.Args[2:])
 	case "discover":
 		err = runDiscover(os.Args[2:])
 	case "pair":
@@ -75,6 +77,10 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `WinForge Agent — 从 Mac/Linux 驱动 Windows 嵌入式构建机
+
+多机协作（Windows 托盘程序）:
+  winforge desk [--ui auto|window|browser] [--no-tray] [--name NAME] [--config FILE]
+    局域网键鼠共享 / 消息与文件传输 / 互相控制；双端确认配对码完成配对。
 
 Windows:
   winforge init [--config FILE] [--root DIR] [--listen ADDR]

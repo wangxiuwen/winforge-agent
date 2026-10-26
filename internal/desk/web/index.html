@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>WinForge Desk · 共享 / 传输 / 控制</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><b>WinForge Desk</b><span id="self-name"></span></div>
+  <div class="ctl-status" id="ctl-status">空闲</div>
+  <label class="share-switch"><input type="checkbox" id="share-toggle"> 键鼠共享</label>
+  <span class="hotkey" id="hotkey-hint"></span>
+</header>
+
+<nav>
+  <button class="tab active" data-tab="share">共享</button>
+  <button class="tab" data-tab="transfer">传输</button>
+  <button class="tab" data-tab="control">控制</button>
+</nav>
+
+<main>
+  <!-- 共享：发现 + 配对 -->
+  <section id="tab-share" class="tab-page active">
+    <h3>发现的设备 <small>同一局域网内运行 WinForge Desk 的机器</small></h3>
+    <div id="presence-list" class="cards"></div>
+    <h3>已配对设备</h3>
+    <div id="paired-list" class="cards"></div>
+    <p class="hint">配对：点"配对"→ 两台机器都会显示同一个 6 位配对码，两边都点确认即完成。
+       方位（左/右）用于屏幕边缘推挤切换；热键 <b id="hotkey-inline"></b> 可随时切换控制。</p>
+  </section>
+
+  <!-- 传输：消息 + 文件 -->
+  <section id="tab-transfer" class="tab-page">
+    <div class="transfer-wrap">
+      <div class="chat-pane">
+        <div class="peer-bar">
+          <select id="chat-peer"></select>
+        </div>
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input">
+          <input id="chat-text" placeholder="给对方发条消息…" maxlength="4096">
+          <button id="chat-send">发送</button>
+        </div>
+      </div>
+      <div class="file-pane">
+        <h3>文件</h3>
+        <div class="file-actions">
+          <input id="file-path" placeholder="或输入本机文件路径">
+          <button id="file-send">发送文件</button>
+          <button id="file-pick" class="alt">选择文件…</button>
+        </div>
+        <div id="transfer-list"></div>
+        <div class="downloads">
+          <button id="open-downloads" class="alt">打开接收目录</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 控制 -->
+  <section id="tab-control" class="tab-page">
+    <div class="control-big" id="control-big">空闲</div>
+    <div class="control-actions">
+      <div id="control-peers" class="cards"></div>
+    </div>
+    <p class="hint">
+      · 把对端设为左/右方位后，把鼠标推过对应屏幕边缘即可控制对方；<br>
+      · 对方把鼠标推回共享边即可交还；<br>
+      · 任何时候按 <b id="hotkey-inline2"></b> 切换；对方拒绝或掉线会自动复位。
+    </p>
+  </section>
+</main>
+
+<!-- 配对弹窗 -->
+<div id="pair-modal" class="modal hidden">
+  <div class="modal-card">
+    <h3 id="pair-title">配对</h3>
+    <div id="pair-body"></div>
+    <div class="modal-actions" id="pair-actions"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<input type="file" id="file-input" class="hidden">
+<script src="app.js"></script>
+</body>
+</html>
