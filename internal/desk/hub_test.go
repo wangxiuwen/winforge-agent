@@ -1009,3 +1009,65 @@ func TestConcurrentCommands(t *testing.T) {
 	// 恢复共享开（后续测试共用全局状态的习惯性复位）。
 	a.ToggleShare(true)
 }
+
+// TestDialRaceConverges R17 仲裁的直接验证：断线后双端同时并发拨号，
+// 会话应收敛为一条且双向可用（修复前会互相踢踩、SendChat 持续失败）。
+func TestDialRaceConverges(t *testing.T) {
+	pa, pb := newFakePlatform(), newFakePlatform()
+	a, _ := newTestHub(t, "主机A", pa)
+	b, _ := newTestHub(t, "主机B", pb)
+	pairTwo(t, a, b)
+	aSelf, bSelf := peerViewsBID(a), peerViewsBID(b)
+	aPeerB, _ := a.cfg.Peer(bSelf) // 含学到的地址
+	bPeerA, _ := b.cfg.Peer(aSelf)
+
+	// 断开触发双端补连意图，然后立即从两端各并发拨两次（复现 R17 前的互踢局面）。
+	a.mu.Lock()
+	if s := a.sessions[bSelf]; s != nil {
+		_ = s.conn.Close()
+	}
+	b.mu.Lock()
+	if s := b.sessions[aSelf]; s != nil {
+		_ = s.conn.Close()
+	}
+	a.mu.Unlock()
+	b.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(2)
+		go func() { defer wg.Done(); a.dialSession(aPeerB, aPeerB.Addr) }()
+		go func() { defer wg.Done(); b.dialSession(bPeerA, "127.0.0.1:"+strconv.Itoa(a.ControlPort())) }()
+	}
+	wg.Wait()
+
+	// 收敛后 3 秒内双方 online 稳定（风暴场景会反复掉线）。
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if !peerViews(a)[0].Online || !peerViews(b)[0].Online {
+			t.Fatal("收敛后有会话掉线（仲裁未生效）")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	// 双向消息都通。
+	if err := a.SendChat(bSelf, "并发后 A2B"); err != nil {
+		t.Fatalf("A→B: %v", err)
+	}
+	if err := b.SendChat(aSelf, "并发后 B2A"); err != nil {
+		t.Fatalf("B→A: %v", err)
+	}
+	waitFor(t, 5*time.Second, "双向消息送达", func() bool {
+		seenA, seenB := false, false
+		for _, ev := range emitterOf(a).all() {
+			if mm, ok := ev.data.(map[string]interface{}); ok && mm["text"] == "并发后 B2A" {
+				seenA = true
+			}
+		}
+		for _, ev := range emitterOf(b).all() {
+			if mm, ok := ev.data.(map[string]interface{}); ok && mm["text"] == "并发后 A2B" {
+				seenB = true
+			}
+		}
+		return seenA && seenB
+	})
+}
