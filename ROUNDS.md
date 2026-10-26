@@ -39,6 +39,11 @@
 
 ## 轮次记录
 
+### R29（2026-10-27）
+- 配置损坏自愈的用户可见性闭环：startupWarning 随快照发给 UI（一次性 toast），
+  用户在控制台就能看到"配置已备份为 xxx 并用默认配置启动"，而不是只在
+  日志里。Options.Version 同链路（R28）。-race 全量绿 + 冒烟通过。
+
 ### R28（2026-10-27）
 - Config 并发访问加固第三批：PeersSnapshot()（切片快照）+ 标量 getter
   （NameV/SelfID/ShareEnabledV/HotkeyV/DownloadsDirV/MaxFileBytesV，cfg.mu 内），

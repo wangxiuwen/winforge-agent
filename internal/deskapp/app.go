@@ -60,6 +60,7 @@ func Run(opts Options) error {
 	logger := log.New(loggerOut, "[desk] ", log.LstdFlags)
 
 	var cfg *desk.Config
+	var startupWarn string
 	warn, err := loadConfigWithRecovery(cfgPath, func() error {
 		c, e := desk.LoadConfig(cfgPath)
 		if e != nil {
@@ -81,6 +82,7 @@ func Run(opts Options) error {
 
 	platform := *desk.NewPlatform(cfg.Hotkey, logger)
 	hub := desk.NewHub(cfg, cfgPath, platform, logger)
+	hub.SetStartupWarning(startupWarn)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

@@ -56,6 +56,9 @@ func (h *Hub) Snapshot() map[string]interface{} {
 		"share":     h.cfg.ShareEnabled,
 		"downloads": h.cfg.DownloadsDir,
 	}
+	if h.startupWarn != "" {
+		out["startupWarning"] = h.startupWarn
+	}
 	if req := h.currentPairRequest(); req != nil {
 		out["pairRequest"] = req
 	}

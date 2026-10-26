@@ -132,6 +132,7 @@ type Hub struct {
 
 	tempUploads map[string]bool
 	chatHistory map[string][]ChatMsg
+	startupWarn string // 配置损坏自愈等启动期警告，随快照发给 UI 一次性展示
 
 	emittersMu sync.Mutex
 	emitters   []Emitter
@@ -183,6 +184,13 @@ func (h *Hub) wakeSessions() {
 	case h.wake <- struct{}{}:
 	default:
 	}
+}
+
+// SetStartupWarning 记录启动期警告（随快照发 UI 一次性展示）。
+func (h *Hub) SetStartupWarning(w string) {
+	h.mu.Lock()
+	h.startupWarn = w
+	h.mu.Unlock()
 }
 
 // Token 返回本次运行的控制台访问令牌。

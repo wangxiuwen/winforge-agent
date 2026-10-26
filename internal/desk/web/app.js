@@ -465,6 +465,12 @@ function pairWaiting(code) {
 }
 
 // ---------- 启动 ----------
+let startupWarnShown = false;
+function maybeShowStartupWarning() {
+  if (startupWarnShown || !S || !S.startupWarning) return;
+  startupWarnShown = true;
+  toast("warn", S.startupWarning);
+}
 (function initTab() {
   const want = new URLSearchParams(location.search).get("tab");
   if (want) {
@@ -472,4 +478,4 @@ function pairWaiting(code) {
     if (btn) btn.click();
   }
 })();
-bridge.snapshot().then((s) => { S = s; render(); }).catch((e) => toast("error", "初始化失败: " + e));
+bridge.snapshot().then((s) => { S = s; render(); maybeShowStartupWarning(); }).catch((e) => toast("error", "初始化失败: " + e));
