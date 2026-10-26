@@ -104,6 +104,17 @@ func (h *Hub) loadChatHistory() {
 	}
 }
 
+// DeleteChatHistory 删除指定对端的聊天记录（内存 + 磁盘文件）。
+// 删除配对即"忘记这台设备"，聊天记录一并清理属隐私要求。
+func (h *Hub) DeleteChatHistory(peerID string) {
+	h.mu.Lock()
+	delete(h.chatHistory, peerID)
+	h.mu.Unlock()
+	if path, ok := h.chatFilePath(peerID); ok {
+		_ = os.Remove(path)
+	}
+}
+
 // ChatHistory 返回指定对端的历史（UI 命令）。
 func (h *Hub) ChatHistory(peerID string) []ChatMsg {
 	h.mu.Lock()

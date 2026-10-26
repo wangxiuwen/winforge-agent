@@ -248,6 +248,7 @@ func (h *Hub) PeerRemove(id string) error {
 	if s != nil {
 		s.close()
 	}
+	h.DeleteChatHistory(id)
 	h.emitState()
 	return err
 }

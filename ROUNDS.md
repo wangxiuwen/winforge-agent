@@ -39,6 +39,12 @@
 
 ## 轮次记录
 
+### R32（2026-10-27）
+- 隐私加固：删除配对时聊天记录文件与内存历史一并清理（"忘记这台设备"
+  语义完整，聊天明文不留磁盘）；DeleteChatHistory 沿用 chatFilePath 的
+  hex 正则校验，非法 ID 不触碰文件系统。补两例测试（清理生效/非法 ID 拒绝）。
+- -race 全量绿 + 冒烟通过。
+
 ### R31（2026-10-27）
 - 控制台 HTTP 安全头：securityHeaders 中间件统一加 X-Content-Type-Options:
   nosniff 与 Referrer-Policy: no-referrer（首次写法误用 ServeMux.Use——标准库
