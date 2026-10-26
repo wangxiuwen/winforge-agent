@@ -8,13 +8,13 @@
 - [x] R1 核心全链路：UDP 发现 / 双确认码配对（X25519+ECDH 派生 PSK）/ AES-GCM 会话 /
       消息 / 文件传输（SHA-256 校验）/ 控制状态机（take/deny/release）/ 托盘 /
       Wails 桌面窗口 / 浏览器控制台 / go test -race 全绿 / 双实例真进程冒烟通过
-- [ ] R2+ Wails 桌面窗口实机启动验证（窗口能开、前端绑定调用、事件到 UI）
-- [ ] R2+ 托盘实机验证：图标显示、菜单动作、共享开关勾选态、tooltip 随控制态变化
+- [x] R3 Wails 桌面窗口实机启动验证（进程存活/端口监听/热键注册/无报错；前端绑定交互待用户实测）
+- [ ] R2+ 托盘实机验证：图标显示、菜单动作（需真人看托盘点菜单，待用户实测；R3 已确认托盘随窗口模式启动无报错）
 - [ ] R2+ 真机键鼠共享实测：钩子捕获→对端注入（同机双实例无法测钩子，需真机或驱动级模拟）
 - [ ] R2+ 热键 RegisterHotKey 实测（Ctrl+Alt+D 切换）
 - [x] R2 断线重连（e2e：强制断开 TCP → 自动重连 → 消息恢复）；杀进程级+控制态不卡键待真机
 - [x] R2 同机双实例发现：UDP SO_REUSEADDR（参考 internal/discovery/reuse_windows.go）
-- [ ] R2+ `winforge desk autostart on|off`（HKCU Run 注册表，x/sys/windows/registry）
+- [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
 - [ ] R2+ 独立 GUI 构建 winforge-desk.exe（-H=windowsgui，无控制台黑窗；参见 monctl 经验）
 - [ ] R2+ 传输增强：取消进行中传输、接收端进度限频、1GB 级大文件
 - [ ] R2+ UI 打磨：拖拽文件发送、聊天记录持久化（会话级）、多对端消息隔离、连接状态动效
@@ -38,6 +38,20 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R3（2026-10-26）
+- 新增 `winforge desk autostart on|off|status`（HKCU Run 键，值名 WinForgeDesk，
+  命令行带 --start-hidden 登录后只留托盘不弹窗）+ `--start-hidden` 旗标接到
+  Wails StartHidden；实测 on→status(开,读回命令行)→off→status(关) 全周期通过。
+- Wails 桌面窗口实机验证：真进程跑窗口模式 9 秒——进程存活、控制端口监听、
+  RegisterHotKey(Ctrl+Alt+D) 成功（无失败日志）、内嵌 go webview2loader 正常、
+  无崩溃无错误输出。托盘图标/菜单点击、窗口内绑定调用需真人观察，待用户实测。
+- ★新发现：Wails 的 webview2loader 在包 init 阶段就往 **stdout** 打
+  "DEB | Using go webview2loader"，污染所有 winforge 子命令输出（含 version/init/serve，
+  会破坏脚本解析）。R4 首项：新建独立 GUI 入口 cmd/winforgedesk（windowsgui 变体
+  也顺势解决），主 CLI cmd/winforge 去掉 wails import。
+- 坑：Git Bash 的 heredoc 会吃 JSON 里的双反斜杠（写临时配置要用 python）；
+  MSYS 会把 reg query 的 /v 转成路径，验证注册表要走程序自身 status 或 powershell。
 
 ### R2（2026-10-26）
 - 发现服务改用 net.ListenConfig{Control: reuseControl}：Windows 只设 SO_REUSEADDR，

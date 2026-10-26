@@ -62,13 +62,14 @@ func (deskWailsEmitter) Emit(event string, data interface{}) {
 	}
 }
 
-func runDeskUI(h *desk.Hub) error {
+func runDeskUI(h *desk.Hub, startHidden bool) error {
 	return wails.Run(&options.App{
 		Title:            "WinForge Desk",
 		Width:            1100,
 		Height:           760,
 		MinWidth:         860,
 		MinHeight:        560,
+		StartHidden:      startHidden,
 		BackgroundColour: options.NewRGB(16, 20, 26),
 		AssetServer: &assetserver.Options{
 			Assets: desk.WebFS(),

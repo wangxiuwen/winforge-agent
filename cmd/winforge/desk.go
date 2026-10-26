@@ -19,11 +19,16 @@ import (
 // Windows：默认起 Wails 桌面窗口 + 系统托盘；--ui browser 用浏览器控制台。
 // 其他平台：浏览器控制台 + 托盘（键鼠控制暂不可用）。
 func runDesk(args []string) error {
+	// 子命令：winforge desk autostart on|off|status
+	if len(args) > 0 && args[0] == "autostart" {
+		return runDeskAutostart(args[1:])
+	}
 	fs := flag.NewFlagSet("desk", flag.ContinueOnError)
 	configPath := fs.String("config", desk.DefaultConfigPath(), "配置文件路径")
 	uiMode := fs.String("ui", "auto", "控制台形态: auto | window | browser")
 	noTray := fs.Bool("no-tray", false, "不启动托盘（配合 --ui browser 做无头自测）")
 	noOpen := fs.Bool("no-open", false, "浏览器模式不自动打开页面")
+	startHidden := fs.Bool("start-hidden", false, "启动时隐藏主窗口（开机自启场景），只留托盘")
 	name := fs.String("name", "", "显示名（默认主机名）")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -79,13 +84,13 @@ func runDesk(args []string) error {
 
 	switch {
 	case *noTray && useWindow:
-		return runDeskUI(hub)
+		return runDeskUI(hub, *startHidden)
 	case *noTray:
 		<-ctx.Done()
 		return nil
 	case useWindow:
 		go desk.RunTray(hub, openConsole, onExit)
-		err := runDeskUI(hub)
+		err := runDeskUI(hub, *startHidden)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -94,6 +99,49 @@ func runDesk(args []string) error {
 		desk.RunTray(hub, openConsole, onExit)
 		return nil
 	}
+}
+
+// autostartCommand 返回要写进自启项的命令行（公共，供 status 显示）。
+func autostartCommand() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return `"` + exe + `" desk --start-hidden`, nil
+}
+
+// runDeskAutostart 管理 HKCU Run 开机自启。
+func runDeskAutostart(args []string) error {
+	action := "status"
+	if len(args) > 0 {
+		action = args[0]
+	}
+	switch action {
+	case "on":
+		if err := autostartEnable(); err != nil {
+			return err
+		}
+		cmdline, _ := autostartCommand()
+		fmt.Println("已开启开机自启:", cmdline)
+	case "off":
+		if err := autostartDisable(); err != nil {
+			return err
+		}
+		fmt.Println("已关闭开机自启")
+	case "status":
+		on, cmdline, err := autostartStatus()
+		if err != nil {
+			return err
+		}
+		if on {
+			fmt.Println("开机自启: 开 —", cmdline)
+		} else {
+			fmt.Println("开机自启: 关")
+		}
+	default:
+		return fmt.Errorf("未知 autostart 动作 %q（支持 on|off|status）", action)
+	}
+	return nil
 }
 
 func openInBrowser(url string) {
