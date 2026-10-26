@@ -21,4 +21,4 @@ release:
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-darwin-arm64 ./cmd/winforge
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-linux-amd64 ./cmd/winforge
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o dist/winforge-linux-arm64 ./cmd/winforge
-	cd dist && shasum -a 256 winforge-* > SHA256SUMS
+	cd dist && shasum -a 256 winforge-* winforgedesk-* > SHA256SUMS

@@ -128,6 +128,7 @@ def main():
         data = secrets.token_bytes(32 * 1024 * 1024 + 777)
         with open(src, "wb") as f:
             f.write(data)
+        t0 = time.time()
         rpc(a["base"], a["token"], "sendFile", [peer_a, src])
         fid = wait_for(lambda: next(iter([d["id"] for d in b["poller"].of("desk:transfer")
                                           if d.get("state") == "offer"]), None), "B 收到文件请求")
@@ -137,7 +138,9 @@ def main():
         with open(path, "rb") as f:
             got = f.read()
         assert got == data, "文件内容不一致"
-        print("[ok] 文件 32MB 校验一致:", path)
+        dt = time.time() - t0
+        mbs = len(data) / dt / (1024 * 1024)
+        print(f"[ok] 文件 32MB 校验一致 ({dt:.1f}s, {mbs:.1f} MB/s 端到端):", path)
         # 4) 控制状态机
         rpc(b["base"], b["token"], "toggleShare", [False])
         time.sleep(0.3)

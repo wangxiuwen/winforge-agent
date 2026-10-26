@@ -17,11 +17,13 @@
 - [x] R3 `winforge desk autostart on|off|status`（HKCU Run，实测全周期）+ --start-hidden
 - [x] R4 独立 GUI 入口 cmd/winforgedesk（-H=windowsgui，无控制台黑窗；日志落盘）
 - [x] R5 传输增强：取消（收发双侧+UI 按钮+对端联动）、接收进度 200ms 限频、32MB 冒烟实测（1GB 靠同一机制，未单独实测）
-- [ ] R2+ UI 打磨：连接状态动效（已完成→R8；聊天持久化已完成→R9）
+- [x] R2+ UI 打磨：连接状态动效（已完成→R8；聊天持久化已完成→R9；R41 核实勾选）
 - [x] R15 控制体验：边缘条渐显/渐隐动画（~200ms alpha 渐变，R8 基础上）；颜色效果待用户实测
 - [x] R9 多对端拓扑：链式切换（被控端推向另一侧方位边 → ctl_chain → 控制器改链目标）
 - [x] R7 性能：移动事件 8ms 合帧（500→1 帧实测）+ capture→inject 往返延迟测量（本机 loopback ~50ms；真实局域网延迟待真机）
-- [ ] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
+- [x] R2+ 打包：Makefile release 增加 winforge-desk-windows 变体、SHA256SUMS
+      （变体早已存在但一直没勾；R41 实测发现 SHA256SUMS 的 `winforge-*` glob
+      匹配不到 `winforgedesk-*`、漏两个 desk 校验和，已修并本地实测 10 产物全出）
 - [x] R11 文档：README 真实控制台截图（无头 Chrome 自动生成）；SECURITY.md desk 章节见 R7
 
 ## 每轮规则（给迭代轮）
@@ -38,6 +40,19 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R41（2026-10-27）
+- ★修发布清单缺口：Makefile SHA256SUMS 用 `shasum -a 256 winforge-*`，glob
+  匹配不到 `winforgedesk-*`（`winforge-*` 要求第 9 字符是 `-`）——两个 desk
+  变体自加入 release 起就没进过校验清单。改 `winforge-* winforgedesk-*`，
+  本地 `make release` 实测：8 产物全出 + SHA256SUMS 8 行（含两个 desk 变体）。
+- 打包清单项勾选（此前"变体早已存在但一直没勾"+本轮补修的 glob）；
+  连接状态动效清单项核实勾选（R8 已做）。
+- 冒烟脚本加吞吐测量：32MB 端到端 1.3s = 25.5 MB/s（本机回环，含 offer/
+  transferRespond 往返；真实局域网带宽另算）。后续回归可对比这个基线。
+- 门禁：go build ✓ / go test desk 13.8s ✓ / make release ✓ / smoke PASS ✓。
+- 教训：glob 按前缀匹配对"共享前缀的兄弟命名"（winforge / winforgedesk）
+  会静默漏项——清单类产物要逐个 glob 或用显式文件名核对行数。
 
 ### R40（2026-10-27）
 - 998d08e 的 CI failure 复盘：HEAD d0967ac（Go 代码完全相同，只差 web 静态文件）
