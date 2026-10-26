@@ -24,10 +24,10 @@ jobs:
         if: failure()
         run: |
           B64=$(base64 -w0 test.log)
-          SHA=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN"             "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log"             | sed -n 's/.*"sha":"\([0-9a-f]*\)".*//p')
-          ARGS="{\"message\":\"test log $GITHUB_SHA\",\"content\":\"$B64\",\"branch\":\"ci-log\""
-          if [ -n "$SHA" ]; then ARGS="$ARGS,\"sha\":\"$SHA\""; fi
-          curl -s -X PUT -H "Authorization: Bearer $GITHUB_TOKEN"             "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log"             -d "$ARGS}"
+          SHA=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log" | grep -o '"sha":"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{40\}')
+          PAYLOAD="{\"message\":\"test log $GITHUB_SHA\",\"content\":\"$B64\",\"branch\":\"ci-log\""
+          if [ -n "$SHA" ]; then PAYLOAD="{\"message\":\"update\",\"content\":\"$B64\",\"branch\":\"ci-log\",\"sha\":\"$SHA\"}"; fi
+          curl -s -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD"
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
