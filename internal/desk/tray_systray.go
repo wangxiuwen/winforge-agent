@@ -48,6 +48,8 @@ func RunTray(h *Hub, openConsole func(), onExit func()) {
 		systray.SetIcon(TrayIcon)
 		systray.SetTitle("WinForge Desk")
 		systray.SetTooltip("WinForge Desk — 共享 / 传输 / 控制")
+		// 左键点图标 = 打开控制台（用户直觉行为；右键仍是完整菜单）
+		systray.SetOnTapped(openConsole)
 		mOpen := systray.AddMenuItem("打开控制台", "打开控制台")
 		mShare := systray.AddMenuItemCheckbox("键鼠共享", "共享总开关", h.ShareEnabledSnapshot())
 		systray.AddSeparator()
