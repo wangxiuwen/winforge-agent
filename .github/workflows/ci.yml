@@ -30,7 +30,7 @@ jobs:
           }
       - name: Diagnostics KEY
         if: failure()
-        run: grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -10 || true
+        run: grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed|_test\.go:[0-9]+:' test.log | sed 's/^/::error::KEY /' | head -10 || true
       - name: Diagnostics TAIL
         if: failure()
         run: tail -8 test.log | sed 's/^/::error::TAIL /' || true

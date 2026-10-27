@@ -45,6 +45,20 @@
 
 ## 轮次记录
 
+### R47（2026-10-27）
+- ea40cf3 的 CI failure 是**R44 诊断通道首次实战成功**：注解直接给出
+  KEY（--- FAIL: TestAddrLearning 4.17s）/TAIL（含 big.bin 拒收 toast，
+  证明 R46 代码在跑）。顺带发现 ci-log 发布这次吐了 401 Bad credentials
+  （GET/PUT 全被拒，疑 GITHUB_TOKEN 瞬时失效或仓库设置变更；b1b5d558 时代
+  是成功的）——好在 KEY/TAIL 注解已够诊断，ci-log 降级为备用通道。
+- TestAddrLearning 失败分析：4.17s 挂 = 15s 的 waitFor 已通过、挂在
+  "学到的地址端口不对"Fatalf；具体 got 值没进注解（KEY 模式缺 _test.go:
+  消息行）→ KEY 模式补 `_test\.go:[0-9]+:`，下次必见 got=...。
+- 本地排查：TestAddrLearning -count=30 连跑 124s 全过（此前全套 race 也
+  多轮全绿）→ CI 特有/竞态嫌疑，本推送即重跑；若再红则据 got 值修
+  （疑点：入站连接的 RemoteAddr 端口学与 hello.Port 更新之间的竞态）。
+- R46 两修复（拒收 emit + nil panic）本轮 CI 复验待出。
+
 ### R46（2026-10-27）
 - ★补 max_file_bytes 边界测试时抓到两个真 bug（TestMaxFileSizeRejected）：
   1. **拒收不发事件**：onFileReject 只改内部状态+toast，从不 emit
