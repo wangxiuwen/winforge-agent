@@ -37,6 +37,9 @@ type wireMsg struct {
 
 	// 控制
 	Y float64 `json:"y,omitempty"`
+
+	// 远程桌面
+	FPS int `json:"fps,omitempty"`
 }
 
 // inputEventFrame 是 FrameInput 的二进制载荷（低频高吞吐路径，不走 JSON）。
@@ -177,6 +180,16 @@ func (s *Session) sendInput(ev InputEvent) error {
 	defer s.sendMu.Unlock()
 	return writeFrame(s.conn, FrameInput, s.keys.seal(inputEventFrame(ev)))
 }
+
+// sendScreenFrame 发送一帧屏幕画面（远程桌面）。
+func (s *Session) sendScreenFrame(payload []byte) error {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
+	return writeFrame(s.conn, FrameScreen, s.keys.seal(payload))
+}
+
+// parseScreenFrame 解析屏幕帧载荷。
+func parseScreenFrame(plain []byte) []byte { return plain }
 
 // handshake 执行握手并完成密钥派生。initiator=true 表示本端主动连接。
 // 返回对端名（握手中的声明）。
@@ -353,6 +366,8 @@ func (s *Session) serve() {
 				return
 			}
 			s.hub.handleRemoteInput(s, ev)
+		case FrameScreen:
+			s.hub.onScreenFrame(plain)
 		default:
 			s.hub.log.Printf("会话 %s 出现未知帧型 %d，断开", s.peer.ID, typ)
 			return

@@ -506,7 +506,24 @@ bridge.on("desk:transfer", (t) => {
   renderTransfers();
 });
 bridge.on("desk:pair", renderPairModal);
-bridge.on("desk:control", (c) => { S.control = c; if (activeTab === "control") renderContent(); });
+bridge.on("desk:control", (c) => {
+  S.control = c;
+  if (activeTab === "control") renderContent();
+  if ((c && c.role) !== 1) {
+    const wrap = $("screen-wrap");
+    if (wrap) wrap.classList.add("hidden");
+  }
+});
+bridge.on("desk:screen", (d) => {
+  if (!d || !d.b64 || activeTab !== "control") return;
+  if ((S.control || {}).role !== 1) return;
+  const img = $("remote-screen");
+  if (img) {
+    img.src = "data:image/jpeg;base64," + d.b64;
+    const wrap = $("screen-wrap");
+    if (wrap) wrap.classList.remove("hidden");
+  }
+});
 bridge.on("desk:toast", (t) => toast(t.level, t.text));
 
 /* ================= 启动 ================= */

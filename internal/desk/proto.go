@@ -19,6 +19,8 @@ const (
 	FrameChunk byte = 0x02
 	// FrameInput 是键鼠输入事件（16B 定长二进制）。
 	FrameInput byte = 0x03
+	// FrameScreen 是远程桌面屏幕帧：[4B W][4B H][4B seq][JPEG]。
+	FrameScreen byte = 0x04
 )
 
 const (
@@ -53,6 +55,8 @@ const (
 	msgPing         = "ping"
 	msgPong         = "pong"
 	msgState        = "state"
+	msgScreenStart  = "screen_start"
+	msgScreenStop   = "screen_stop"
 )
 
 // 配对阶段 JSON 消息类型。

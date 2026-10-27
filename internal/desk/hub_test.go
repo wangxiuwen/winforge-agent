@@ -63,6 +63,7 @@ type fakePlatform struct {
 	escapeCh  chan struct{}
 	cursor    [2]int32
 	indicator []string // "on/controller", "on/controlled", "off"
+	captureScreen func(maxW, quality int) ([]byte, int, int, error)
 }
 
 func newFakePlatform() *fakePlatform {
@@ -92,7 +93,7 @@ func (f *fakePlatform) sendCapture(ev InputEvent) {
 }
 
 func (f *fakePlatform) toPlatform() Platform {
-	return Platform{
+	p := Platform{
 		Injector: func() (Injector, error) { return f.inj, nil },
 		StartCapture: func(ch chan InputEvent) (func(), error) {
 			f.mu.Lock()
@@ -126,6 +127,13 @@ func (f *fakePlatform) toPlatform() Platform {
 			f.mu.Unlock()
 		},
 	}
+	if f.captureScreen != nil {
+		cs := f.captureScreen
+		p.CaptureScreen = func(maxW, quality int) ([]byte, int, int, error) {
+			return cs(maxW, quality)
+		}
+	}
+	return p
 }
 
 func newTestHub(t *testing.T, name string, p *fakePlatform) (*Hub, string) {

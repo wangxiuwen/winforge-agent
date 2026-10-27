@@ -188,7 +188,8 @@ func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 		logger.Printf("边缘提示条不可用: %v", err)
 	}
 	return &Platform{
-		Injector: func() (Injector, error) { return wi, nil },
+		Injector:      func() (Injector, error) { return wi, nil },
+		CaptureScreen: captureScreenGDI,
 		StartCapture: func(ch chan InputEvent) (func(), error) {
 			wi.refreshCenter()
 			wi.sink.Store((*chan InputEvent)(&ch))

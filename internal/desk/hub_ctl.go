@@ -118,7 +118,11 @@ func (h *Hub) TakeControl(peerID string, yRatio float64) error {
 		yRatio = cursorYRatio(h.platform.ScreenBounds(), y)
 	}
 	h.controlChanged()
-	go func() { _ = s.sendJSON(wireMsg{T: msgCtlTake, Y: yRatio}) }()
+	go func() {
+		_ = s.sendJSON(wireMsg{T: msgCtlTake, Y: yRatio})
+		// 请求对端开始推屏（基本远程桌面）；失败不影响键鼠控制。
+		_ = s.sendJSON(wireMsg{T: msgScreenStart, FPS: screenDefaultFPS})
+	}()
 	return nil
 }
 
@@ -498,6 +502,7 @@ func (h *Hub) stopControlling() {
 	h.mu.Unlock()
 	if s != nil {
 		_ = s.sendJSON(wireMsg{T: msgCtlRelease, Y: 0})
+		_ = s.sendJSON(wireMsg{T: msgScreenStop})
 	}
 	h.endControlLocal()
 	h.toast("info", "已结束键鼠共享")

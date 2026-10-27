@@ -38,6 +38,8 @@ type Platform struct {
 	SetCursor func(x, y int32)
 	// SetControlIndicator 控制状态可视化（Windows: 屏幕边缘提示条）；可为 nil。
 	SetControlIndicator func(on bool, controller bool, edge Edge)
+	// CaptureScreen 抓取主屏为 JPEG（宽不超过 maxW；远程桌面用）。可为 nil。
+	CaptureScreen func(maxW, quality int) (jpeg []byte, w, h int, err error)
 }
 
 // 控制角色。
@@ -123,6 +125,7 @@ type Hub struct {
 	captureCh   chan InputEvent
 	captureStop func()
 	ctlDone     chan struct{} // 本次控制会话的退出信号
+	screenLoop  *screenLoopState
 	injector    Injector
 	injKeys     *PressedKeys
 	injButtons  map[MouseButton]bool

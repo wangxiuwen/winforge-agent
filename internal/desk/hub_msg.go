@@ -79,6 +79,10 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 		h.onCtlDeny(s)
 	case msgCtlChain:
 		h.onCtlChain(s, m)
+	case msgScreenStart:
+		h.startScreenLoop(s, m.FPS)
+	case msgScreenStop:
+		h.stopScreenLoop()
 	case msgCtlRelease:
 		h.onCtlRelease(s, m)
 	case msgCtlReleaseOK:

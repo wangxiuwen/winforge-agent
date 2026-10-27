@@ -52,6 +52,27 @@
 
 ## 轮次记录
 
+### R67（2026-10-27）★用户需求：基本远程桌面 v1
+- 用户新需求（插话优先）："最好也能实现基本的远程桌面，办公室多台机器
+  在一台上控制别的"。v1 实现：**控制对端时实时看到对方屏幕画面**。
+- 协议：新帧型 FrameScreen（0x04，[4B W][4B H][4B seq][JPEG]，复用 8MiB
+  帧上限——一帧 JPEG 无需分块）+ 控制消息 screen_start（带 fps）/
+  screen_stop。推流是干净加法：不发即无流量，协议向后兼容。
+- 被控端：screenLoop（新 screen.go）——被控期间 3fps 经 Platform 新接口
+  CaptureScreen(maxW,quality) 抓屏，每 tick 自检角色（非被控即自停，
+  Esc/释放/断连三种路径全覆盖）。控制端：onScreenFrame → emit
+  desk:screen {w,h,b64}。
+- Windows 抓屏（screen_windows.go）：GDI BitBlt 主屏→32bpp DIB（top-down）
+  →RGBA→JPEG q60，宽>1600 按比缩小。真机验证 1600×900/79KB/可解码。
+- 控制端 UI：控制视图新增"对方屏幕（实时画面）"查看器（<img> data URL），
+  控制结束自动隐藏；带宽 ~240KB/s@3fps（局域网无压力）。
+- 测试：TestScreenStreamOnControl（fake 抓屏端到端：控制后收到匹配帧、
+  释放后事件停止，-race count=2 ✓）+ TestCaptureScreenGDI（Windows 专属
+  真机测试，CI Linux 不编译）。
+- 门禁：全套 -race ✓ / smoke PASS ✓ / node --check ✓。
+- v1 已知边界：全帧编码无脏区优化（后续可加游标叠加/脏区/自适应质量）；
+  仅主屏（多屏拼接后续）；查看器在控制视图内（全屏查看器后续）。
+
 ### R66（2026-10-27）
 - R65 待办落地：**autostart 覆盖警告**——AutostartEnable 改返回 warn（已有
   自启项且指向不同时非空），CLI/GUI 两入口打印。真机验证：Temp 副本执行
