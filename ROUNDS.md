@@ -52,6 +52,14 @@
 
 ## 轮次记录
 
+### R63（2026-10-27）
+- 新增 docs/architecture.md：desk 模块分层（proto/crypto/pairing/session/
+  hub 四件套/discovery/ui/平台层）、信任边界与安全模型、四个关键流程
+  （配对双角色按钮文案差异/会话重连收敛窗口/边缘推挤/事件流续传）、
+  已知边界与自测入口——把散在 ROUNDS 里的架构知识收敛成贡献者文档，
+  新人不用再从 60+ 轮记录里考古。
+- 门禁：build ✓ / desk 测试 ✓（纯文档轮）。
+
 ### R62（2026-10-27）
 - 26fb54a 的 CI DATA RACE 追查：本地 Windows -race -cpu 1,2,4 十轮全净 →
   沉淀 **WSL Linux 本地复现能力**（每轮规则 5b）：WSL 里跑 Linux 编译变体
