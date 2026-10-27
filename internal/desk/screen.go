@@ -12,7 +12,7 @@ import (
 
 const (
 	screenDefaultFPS  = 3
-	screenMaxWidth    = 1600
+	screenMaxWidth    = 1920
 	screenJPEGQuality = 60
 	screenFrameHdrLen = 12 // [4B W][4B H][4B BE seq]
 )
