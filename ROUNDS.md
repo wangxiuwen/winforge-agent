@@ -48,6 +48,16 @@
 
 ## 轮次记录
 
+### R56（2026-10-27）
+- 补 TestChatHistoryCapTrim：聊天历史上限裁剪（>500 条裁旧留新，首末条
+  精确断言）+ 重启恢复后仍为上限条数——此前 TestChatPersistence 只测
+  持久化不测裁剪，裁剪逻辑（recordChat 的 list 切片）首次有测试钉住。
+- --start-hidden GUI 形态实机验证：真进程起 winforgedesk --start-hidden，
+  10 秒后进程存活 ✓、UIA 窗口枚举数=0（完全不可见，符合"开机自启形态：
+  只留托盘"设计）。托盘图标可见性本身仍待用户实测。
+- 教训：写验证脚本前先确认依赖产物的实际路径（uia_pair 的构建产物在
+  wfdesk-uiapair 不在脚本临时目录，FileNotFoundError 白跑一轮）。
+
 ### R55（2026-10-27）
 - uia_pair_desk.py 补全发出方向：A 桌面输入框真实输入+点"发送"→B 侧
   chatHistory 断言收到——Wails 双参数方法绑定（SendChat(id,text)）首次
