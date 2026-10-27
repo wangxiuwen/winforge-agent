@@ -907,24 +907,37 @@ func TestAddrLearning(t *testing.T) {
 	pairTwo(t, a, b)
 	aSelfID := peerViewsBID(a) // A 自己的 ID（B 视角的对端）
 
-	// B 的 peer 记录应已学到 A 的地址（A 的控制端口）。
-	waitFor(t, 15*time.Second, "B 学到 A 的地址", func() bool {
-		for _, p := range peerViews(b) {
-			if p.ID == aSelfID && p.Addr != "" {
-				return true
+	// B 的 peer 记录最终应学到 A 的地址（IP + A 的控制端口）。
+	// 地址学习是最终一致（配对先落空地址，hello 随后补正），轮询到
+	// "端口也正确"为止；超时 dump B 视角全部 peer，避免只见 got 不见全貌。
+	wantPort := a.ControlPort()
+	wantSuffix := ":" + strconv.Itoa(wantPort)
+	deadline := time.Now().Add(15 * time.Second)
+	var views []PeerView
+	learned := false
+	for time.Now().Before(deadline) {
+		views = peerViews(b)
+		for _, p := range views {
+			if p.ID == aSelfID && strings.HasSuffix(p.Addr, wantSuffix) {
+				learned = true
 			}
 		}
-		return false
-	})
-	// 学到的端口应是 A 的控制端口。
-	wantPort := a.ControlPort()
+		if learned {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !learned {
+		t.Fatalf("B 未学到 A 的正确地址: want=*:%d, B 视角=%+v", wantPort, views)
+	}
+	// 终态断言（轮询已保证，此处防御性保留）。
 	got := ""
 	for _, p := range peerViews(b) {
 		if p.ID == aSelfID {
 			got = p.Addr
 		}
 	}
-	if !strings.HasSuffix(got, ":"+strconv.Itoa(wantPort)) {
+	if !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("学到的地址端口不对: got=%q want=*:%d", got, wantPort)
 	}
 	// 断开 → B 现在能主动回连（而不是只能等 A）。
