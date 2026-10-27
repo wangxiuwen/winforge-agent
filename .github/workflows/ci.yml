@@ -23,23 +23,40 @@ jobs:
       - name: Test
         run: |
           go test -race ./... > test.log 2>&1 || {
+            # 注解每步上限 10 条：本步只发 TEST-FAILED+HEAD 3 行，KEY/TAIL 走下面的独立步骤
             echo "::error::TEST-FAILED exit=$? lines=$(grep -c '' test.log)"
-            sed -n '1,25p' test.log | sed 's/^/::error::HEAD /'
-            grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -30
-            tail -60 test.log | sed 's/^/::error::TAIL /'
+            sed -n '1,3p' test.log | sed 's/^/::error::HEAD /'
             exit 1
           }
+      - name: Diagnostics KEY
+        if: failure()
+        run: grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed' test.log | sed 's/^/::error::KEY /' | head -10 || true
+      - name: Diagnostics TAIL
+        if: failure()
+        run: tail -8 test.log | sed 's/^/::error::TAIL /' || true
       - name: Publish test log
         if: failure()
         continue-on-error: true
         run: |
+          # 默认 shell 是 bash -eo pipefail：grep 落空会静默中止本步并掩盖失败，
+          # 曾导致 ci-log 长期不更新且无任何诊断输出（998d08e/d59f382 两次）。
+          set +e
+          GET=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log")
+          echo "::error::PUBLISH-GET-LEN ${#GET}"
+          SHA=$(echo "$GET" | grep -o '"sha": *"[0-9a-f]\{40\}"' | grep -o '[0-9a-f]\{40\}' | head -1)
+          echo "::error::PUBLISH-SHA ${SHA:-none}"
           B64=$(base64 -w0 test.log)
-          SHA=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log?ref=ci-log" | grep -o '"sha":"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{40\}')
           PAYLOAD="{\"message\":\"test log $GITHUB_SHA\",\"content\":\"$B64\",\"branch\":\"ci-log\""
           if [ -n "$SHA" ]; then PAYLOAD="{\"message\":\"update\",\"content\":\"$B64\",\"branch\":\"ci-log\",\"sha\":\"$SHA\"}"; fi
           HTTP=$(curl -s -o /tmp/put.json -w "%{http_code}" -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD")
           echo "::error::PUBLISH-HTTP $HTTP"
-          if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then head -c 400 /tmp/put.json | sed 's/^/::error::PUBLISH-BODY /'; fi
+          if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+            head -c 400 /tmp/put.json | sed 's/^/::error::PUBLISH-BODY /'
+            sleep 3
+            HTTP=$(curl -s -o /tmp/put.json -w "%{http_code}" -X PUT -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${{ github.repository }}/contents/ci-log/test.log" -d "$PAYLOAD")
+            echo "::error::PUBLISH-RETRY-HTTP $HTTP"
+            if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then head -c 400 /tmp/put.json | sed 's/^/::error::PUBLISH-RETRY-BODY /'; fi
+          fi
       - run: go vet ./...
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

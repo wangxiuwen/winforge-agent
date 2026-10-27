@@ -43,6 +43,25 @@
 
 ## 轮次记录
 
+### R44（2026-10-27）
+- d59f382 CI failure 诊断（签名与 998d08e 完全相同：日志停在 desk 配对中间、
+  exit=1、KEY 零命中）反转出两个通道级问题：
+  1. **注解 10 条/步上限**：HEAD 25 行 + TEST-FAILED 就把 Test 步配额吃光，
+     KEY/TAIL 全被 GitHub 静默丢弃——R40 的"加宽"实际没人看得见。改为
+     KEY/TAIL 拆独立步骤（各拿 10 条配额），HEAD 减到 3 行。
+  2. **ci-log 发布静默失败**：jobs API 显示 Publish 步 conclusion=success，
+     那是 continue-on-error 掩盖后的结论——默认 shell 是 `bash -eo pipefail`，
+     `SHA=$(curl|grep|head|grep)` 一旦 grep 落空整条管道非零，`-e` 中止脚本，
+     PUT 和 PUBLISH-HTTP 回显根本没执行（998d08e 起两次失败日志全丢）。
+     修：`set +e` + GET-LEN/SHA 诊断回显 + sha grep 兼容 `"sha": "..."`
+     带空格格式 + 失败重试一次。
+- 本地排查 R43 代码嫌疑：desk 套件 -race count=2 连跑 35.8s 全绿——
+  d59f382 失败更可能是 CI 侧抖动（与 998d08e 同理），本次推送本身就是重跑；
+  若再红，新通道下必出完整日志。
+- 教训：**continue-on-error 会把"中途失败"包装成 success**，查 channels
+  要看 jobs API 的 steps 明细；管道赋值在 pipefail 下是隐形地雷；诊断
+  通道要按 GitHub 注解上限（10/步）设计预算。
+
 ### R43（2026-10-27）
 - 传输历史进 Snapshot（R42 留下的已知缺口收口）：emit 对 desk:transfer 统一
   记录（recordTransfer，独立 trMu——emit 的调用方有的持 h.mu 有的不持，不能
