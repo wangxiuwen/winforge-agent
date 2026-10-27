@@ -36,7 +36,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	logWriter, closeLog, logErr := deskapp.OpenRotatingLog()
+	logWriter, closeLog, logErr := deskapp.OpenRotatingLog(*configPath)
 	if logErr != nil {
 		logWriter = os.Stderr
 	} else {

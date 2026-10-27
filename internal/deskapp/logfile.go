@@ -71,9 +71,11 @@ func (w *rotateWriter) rotate() error {
 
 func (w *rotateWriter) Close() error { return w.f.Close() }
 
-// OpenRotatingLog 打开 GUI 入口的日志（%LOCALAPPDATA%/winforge/desk.log），
-// 超 5MB 自动归档轮转。
-func OpenRotatingLog() (io.Writer, func(), error) {
+// OpenRotatingLog 打开 GUI 入口的日志，超 5MB 自动归档轮转。
+// configPath 非默认时日志名跟随配置文件名（<配置名>.log），多实例
+// （多份配置同时跑 GUI，如自动化双开）日志不交织；默认路径仍是
+// %LOCALAPPDATA%/winforge/desk.log。
+func OpenRotatingLog(configPath string) (io.Writer, func(), error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return nil, nil, err
@@ -81,7 +83,18 @@ func OpenRotatingLog() (io.Writer, func(), error) {
 	if err := os.MkdirAll(filepath.Join(dir, "winforge"), 0o700); err != nil {
 		return nil, nil, err
 	}
-	w, err := newRotateWriter(filepath.Join(dir, "winforge", "desk.log"), logMaxBytes)
+	name := "desk.log"
+	defaultCfg := filepath.Join(dir, "winforge", "desk.json")
+	if configPath != "" && configPath != defaultCfg {
+		base := filepath.Base(configPath)
+		if ext := filepath.Ext(base); ext != "" {
+			base = base[:len(base)-len(ext)]
+		}
+		if base != "" && base != "desk" {
+			name = base + ".log"
+		}
+	}
+	w, err := newRotateWriter(filepath.Join(dir, "winforge", name), logMaxBytes)
 	if err != nil {
 		return nil, nil, err
 	}

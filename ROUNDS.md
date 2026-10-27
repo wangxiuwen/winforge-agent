@@ -52,6 +52,15 @@
 
 ## 轮次记录
 
+### R64（2026-10-27）
+- GUI 日志按配置名分离：OpenRotatingLog(configPath)——`--config` 非默认时
+  日志写 `<配置名>.log`（默认仍是 %APPDATA%/winforge/desk.log）。此前多
+  GUI 实例共写同一 desk.log（交织+轮转互相踩），R54/R61 排障时都被坑过。
+  真机验证：双实例（日志甲机/乙机.json）各自落盘独立日志 ✓，桌面端已重部署。
+- 顺带确认：os.UserConfigDir 在 Windows 返回 **Roaming AppData**（不是
+  LOCALAPPDATA）——查日志路径别走错目录。
+- 门禁：build ✓ / deskapp 测试 ✓ / 全套 -race 39.6s ✓。
+
 ### R63（2026-10-27）
 - 新增 docs/architecture.md：desk 模块分层（proto/crypto/pairing/session/
   hub 四件套/discovery/ui/平台层）、信任边界与安全模型、四个关键流程
