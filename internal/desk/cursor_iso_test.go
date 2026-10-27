@@ -9,7 +9,7 @@ import (
 
 func TestDrawCursorMarkerIsolated(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 400, 225))
-	drawCursorMarker(img, 1920, 1080, 400, 225)
+	drawCursorMarker(img, 0, 0, 1920, 1080, 400, 225)
 	red := 0
 	for y := 0; y < 225; y++ {
 		for x := 0; x < 400; x++ {

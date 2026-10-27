@@ -11,8 +11,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// 远程桌面抓屏：GDI BitBlt 主屏 → 32bpp DIB → RGBA → JPEG。
-// v1 全帧无差异编码，宽超过 maxW 时按比例缩小（GO 内最近邻采样）。
+// 远程桌面抓屏：GDI BitBlt 全虚拟屏（多屏拼接）→ 32bpp DIB → RGBA → JPEG。
+// 宽超过 maxW 时按比例缩小；虚拟屏原点可为负，BitBlt 源坐标用其原值。
 
 var (
 	screenGdi32            = windows.NewLazySystemDLL("gdi32.dll")
@@ -33,6 +33,12 @@ const (
 	srccopyScr = 0x00CC0020
 	dibRGBScr  = 0 // BI_RGB
 	dibColors  = 0 // DIB_RGB_COLORS
+
+	// 虚拟屏（全部显示器的包围盒）：多屏办公机的完整画面。
+	smXVirtual  = 76
+	smYVirtual  = 77
+	smCXVirtual = 78
+	smCYVirtual = 79
 )
 
 type bitmapInfoHeaderScr struct {
@@ -62,8 +68,12 @@ func captureScreenGDI(maxW, quality int) ([]byte, int, int, error) {
 	}
 	defer procReleaseDC.Call(0, hdc)
 
-	sw, _, _ := user32.NewProc("GetSystemMetrics").Call(smCXScreen)
-	sh, _, _ := user32.NewProc("GetSystemMetrics").Call(smCYScreen)
+	// 多屏：抓全虚拟屏包围盒（原点可能为负），单屏机器等价于主屏。
+	vx, _, _ := user32.NewProc("GetSystemMetrics").Call(smXVirtual)
+	vy, _, _ := user32.NewProc("GetSystemMetrics").Call(smYVirtual)
+	sw, _, _ := user32.NewProc("GetSystemMetrics").Call(smCXVirtual)
+	sh, _, _ := user32.NewProc("GetSystemMetrics").Call(smCYVirtual)
+	vxI, vyI := int32(vx), int32(vy)
 	swI, shI := int32(sw), int32(sh)
 	if swI <= 0 || shI <= 0 {
 		return nil, 0, 0, errScreenCapture("屏幕尺寸异常")
@@ -99,7 +109,7 @@ func captureScreenGDI(maxW, quality int) ([]byte, int, int, error) {
 	procSelectObjectScr.Call(memDC, hbm)
 	ok, _, err3 := procBitBltScr.Call(memDC,
 		0, 0, uintptr(outW), uintptr(outH),
-		hdc, 0, 0, uintptr(srccopyScr))
+		hdc, uintptr(vxI), uintptr(vyI), uintptr(srccopyScr))
 	if ok == 0 {
 		return nil, 0, 0, errScreenCapture("BitBlt 失败: " + err3.Error())
 	}
@@ -113,7 +123,7 @@ func captureScreenGDI(maxW, quality int) ([]byte, int, int, error) {
 		img.Pix[j+2] = pix[i+0] // B
 		img.Pix[j+3] = 0xFF
 	}
-	drawCursorMarker(img, swI, shI, int(outW), int(outH))
+	drawCursorMarker(img, vxI, vyI, swI, shI, int(outW), int(outH))
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, 0, 0, err
@@ -130,8 +140,9 @@ func errScreenCapture(msg string) error { return screenCaptureError(msg) }
 type pointScr struct{ X, Y int32 }
 
 // drawCursorMarker 把被控端物理光标（即控制者移动的光标）画成白边红点，
-// 让控制端有位置反馈。sw/sh 为抓屏时的屏幕原尺寸（光标是屏幕坐标）。
-func drawCursorMarker(img *image.RGBA, sw, sh int32, outW, outH int) {
+// 让控制端有位置反馈。vx/vy/sw/sh 为抓屏时的虚拟屏原点与尺寸（光标是
+// 虚拟屏坐标，多屏时原点可为负——直接除尺寸会画到边缘，R70 实测）。
+func drawCursorMarker(img *image.RGBA, vx, vy, sw, sh int32, outW, outH int) {
 	var pt pointScr
 	// 注意：LazyProc.Call 的 err 是 GetLastError，成功时也常非 nil——必须判 r1。
 	if r1, _, _ := procGetCursorPosScr.Call(uintptr(unsafe.Pointer(&pt))); r1 == 0 {
@@ -140,8 +151,8 @@ func drawCursorMarker(img *image.RGBA, sw, sh int32, outW, outH int) {
 	if sw <= 0 || sh <= 0 {
 		return
 	}
-	cx := int(float64(pt.X) / float64(sw) * float64(outW))
-	cy := int(float64(pt.Y) / float64(sh) * float64(outH))
+	cx := int(float64(pt.X-vx) / float64(sw) * float64(outW))
+	cy := int(float64(pt.Y-vy) / float64(sh) * float64(outH))
 	const rOuter, rInner = 9, 5 // 白边红心
 	b := img.Rect
 	for dy := -rOuter; dy <= rOuter; dy++ {
