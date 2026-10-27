@@ -2,6 +2,14 @@ package desk
 
 import "time"
 
+// FrontendError 记录前端上报的错误（window.onerror/unhandledrejection/
+// console.error 经 Wails 绑定流回，供 desk.log 诊断渲染层问题）。
+func (h *Hub) FrontendError(msg string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.log.Printf("[frontend] %s", msg)
+}
+
 // HotkeyWarning 等待热键注册结果并返回失败警告（空串=正常）。
 // 非平台宿主（HotkeyReady 为 nil，如非 Windows 桩）返回空串。
 // 注册在平台线程上异步完成，这里最多等 2 秒。

@@ -54,6 +54,16 @@
 
 ## 轮次记录
 
+### R84（2026-10-28）
+- 落地 frontendError 上报管线（R83 诊断工具转正）：前端 window.error/
+  unhandledrejection/console.error → Wails 绑定 FrontendError → hub 日志
+  [frontend] 前缀——Wails 窗口的渲染层错误从此可在 desk.log 诊断（此前
+  CDP 因 production 构建禁 DevTools 而不可用）。
+- 真机验证：热键占用场景下实例运行无 [frontend] 错误（横幅渲染正常，
+  截图为证）；该管线未来任何前端渲染异常都会自动进日志。
+- 门禁：全套 -race ✓ / smoke PASS ✓ / WSL Linux 前置验证 ✓。
+
+### R83（2026-10-28）
 ### R82（2026-10-28）★Wails 窗口横幅未渲染——待深挖
 - R80 热键警告在 **Wails 桌面窗口未显示**（浏览器模式横幅+toast 正常，
   截图为证）。症状精确化：设备列表等 render 前半段内容正常渲染，但

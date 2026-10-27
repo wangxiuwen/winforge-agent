@@ -44,6 +44,7 @@ func (d *Desk) TakeControl(id string) error { return d.h.TakeControl(id, -1) }
 func (d *Desk) ReleaseControl()             { d.h.ReleaseControl(-1) }
 func (d *Desk) ToggleShare(on bool)         { d.h.ToggleShare(on) }
 func (d *Desk) OpenPath(path string) error  { return d.h.OpenPath(path) }
+func (d *Desk) FrontendError(msg string)    { d.h.FrontendError(msg) }
 
 // PickAndSendFile 弹系统文件选择框并发送。
 func (d *Desk) PickAndSendFile(peerID string) error {

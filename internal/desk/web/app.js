@@ -535,6 +535,22 @@ bridge.on("desk:screen", (d) => {
 });
 bridge.on("desk:toast", (t) => toast(t.level, t.text));
 
+/* ================= 前端错误上报（经 hub 日志可诊断） ================= */
+function reportFrontendError(kind, detail) {
+  try { bridge.call("frontendError", kind + ": " + detail); } catch (_) {}
+}
+window.addEventListener("error", (e) => {
+  reportFrontendError("uncaught", (e.message || "?") + " @ " + (e.filename || "?") + ":" + (e.lineno || 0));
+});
+window.addEventListener("unhandledrejection", (e) => {
+  reportFrontendError("unhandledrejection", String((e.reason && e.reason.stack) || e.reason || e));
+});
+const _origConsoleError = console.error.bind(console);
+console.error = function (...args) {
+  reportFrontendError("console.error", args.map(a => (a && a.stack) ? a.stack : String(a)).join(" "));
+  _origConsoleError(...args);
+};
+
 /* ================= 启动 ================= */
 function maybeShowStartupWarning() {
   if (startupWarnShown || !S || !S.startupWarning) return;
