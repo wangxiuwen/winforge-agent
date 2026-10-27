@@ -137,6 +137,15 @@ function render() {
   renderHeader();
   renderListPanel();
   renderContent();
+  const banner = $("startup-banner");
+  if (banner) {
+    if (S.startupWarning) {
+      banner.textContent = S.startupWarning;
+      banner.classList.remove("hidden");
+    } else {
+      banner.classList.add("hidden");
+    }
+  }
   maybeShowStartupWarning();
 }
 function renderHeader() {
