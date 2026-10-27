@@ -48,6 +48,17 @@
 
 ## 轮次记录
 
+### R52（2026-10-27）
+- 新增 TestSessionGoroutineHygiene（泄漏回归）：10 轮强制断开→重连后
+  goroutine 三采样（3s/4s/4s 间隔）不增长即过（容差 6）——泄漏会随轮数
+  单调增长，增长信号不受前面测试遗留的常量 goroutine 影响。实测
+  22→20→20 收敛，-race count=3 连跑全过。
+- README troubleshooting 补"断线重连后消息没到"（收敛窗口不补投、稍后
+  重发即可）——把 ROUNDS 里的已知边界第一次写进用户可见文档。
+- 坑：sessions 表以**对端** ID 为键，写测试时先想清楚视角（第一次就写反
+  成自己的 ID，waitFor 永假）。hub 无 Stop 方法，测试内 hub 生命周期到
+  t.Cleanup 才结束——泄漏测试要采样"增长"而非对比固定基线。
+
 ### R51（2026-10-27）
 - R49 方法集清剿的**漏网之鱼补刀**：ui.go 上传处理器两处 MaxFileBytes 裸读
   + hub_ui.go SendFile 的 openSenderFile 一处——R49 的 grep 输出被 head -20
