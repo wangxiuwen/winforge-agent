@@ -55,6 +55,11 @@ internal/desk         核心包（平台无关部分全部下沉在此）：
 朝控制器方位的边推 = 拿回，朝另一侧 = 链式切换到第三个对端。移动事件
 8ms 合帧。热键 Ctrl+Alt+D 在任意状态切换。Esc 让被控端立即拿回。
 
+跨分辨率/多屏映射：控制端以自己屏幕 bounds 积分出虚拟位置（比例），
+被控端 InjectMove 用 mouseeventfAbsolute|VirtualDesk 将比例映射到被控端
+全虚拟屏——两侧分辨率不同或多屏拼接都按比例对齐。远程桌面抓屏同为
+被控端全虚拟屏，光标按同比例叠加。
+
 ### 基本远程桌面
 控制发起后控制器请求推屏（screen_start），被控端 screenLoop 以 3fps 经
 `Platform.CaptureScreen`（Windows: GDI BitBlt→DIB→RGBA→JPEG，宽>1600 缩放，
