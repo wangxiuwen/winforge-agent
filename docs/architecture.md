@@ -55,6 +55,13 @@ internal/desk         核心包（平台无关部分全部下沉在此）：
 朝控制器方位的边推 = 拿回，朝另一侧 = 链式切换到第三个对端。移动事件
 8ms 合帧。热键 Ctrl+Alt+D 在任意状态切换。Esc 让被控端立即拿回。
 
+### 基本远程桌面
+控制发起后控制器请求推屏（screen_start），被控端 screenLoop 以 3fps 经
+`Platform.CaptureScreen`（Windows: GDI BitBlt→DIB→RGBA→JPEG，宽>1600 缩放，
+光标画白边红点）抓屏，经 FrameScreen 原始帧（[W][H][seq][JPEG]，8MiB 上限）
+直发。控制端解帧后 emit desk:screen，控制视图查看器显示；释放/Esc/断连
+时循环自停。v1 边界：全帧无脏区、仅主屏、查看器嵌在控制视图。
+
 ### 事件流（浏览器控制台）
 `/api/events?after=seq` 长轮询 + 服务端 512 条回放环（`desk:state` 高频
 快照不入环），客户端断线重连按 seq 补缺口；聊天按 `peer|ts` 去重。

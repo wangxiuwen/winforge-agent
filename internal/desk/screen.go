@@ -3,9 +3,6 @@ package desk
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"image/jpeg"
-	"image"
-	"bytes"
 	"time"
 )
 
@@ -105,13 +102,4 @@ func (h *Hub) onScreenFrame(payload []byte) {
 		"h":   ht,
 		"b64": base64.StdEncoding.EncodeToString(jpegBytes),
 	})
-}
-
-// encodeScreenJPEG 供测试与未来复用：内存图像转 JPEG。
-func encodeScreenJPEG(img image.Image, quality int) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
