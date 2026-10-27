@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,14 +32,22 @@ type uiBus struct {
 	seq     int
 	subs    map[int]chan uiEvent
 	nextSub int
+	hist    []uiEvent // 有界回放环：补长轮询空档丢失的事件（?after=seq）
 }
 
 func newUIBus() *uiBus { return &uiBus{subs: map[int]chan uiEvent{}} }
+
+// uiBusHistCap 回放环容量；超限后较早事件不可补（客户端以快照自愈）。
+const uiBusHistCap = 512
 
 func (b *uiBus) Emit(event string, data interface{}) {
 	b.mu.Lock()
 	b.seq++
 	ev := uiEvent{Seq: b.seq, Event: event, Data: data}
+	b.hist = append(b.hist, ev)
+	if len(b.hist) > uiBusHistCap {
+		b.hist = b.hist[len(b.hist)-uiBusHistCap:]
+	}
 	subs := make([]chan uiEvent, 0, len(b.subs))
 	for _, ch := range b.subs {
 		subs = append(subs, ch)
@@ -52,13 +61,31 @@ func (b *uiBus) Emit(event string, data interface{}) {
 	}
 }
 
-func (b *uiBus) subscribe() (int, chan uiEvent) {
+// subscribe 订阅事件流；after>0 时先回放 (after, seq] 的历史事件（写入 ch）。
+// after 缺省（0）表示老客户端/首连，只投递实时事件不回放。
+// 客户端 after 晚于当前 seq（如 hub 重启 seq 归零）时视为无缺口，不回放。
+func (b *uiBus) subscribe(after int) (int, chan uiEvent) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.nextSub++
 	id := b.nextSub
 	ch := make(chan uiEvent, 256)
 	b.subs[id] = ch
+	if after > 0 && after < b.seq {
+		var replay []uiEvent
+		for _, ev := range b.hist {
+			if ev.Seq > after {
+				replay = append(replay, ev)
+			}
+		}
+		// 只回放最近 256 条（=通道缓冲），保证持锁写入不阻塞。
+		if len(replay) > 256 {
+			replay = replay[len(replay)-256:]
+		}
+		for _, ev := range replay {
+			ch <- ev
+		}
+	}
 	return id, ch
 }
 
@@ -237,7 +264,8 @@ func errString(err error) string {
 
 // handleEvents 长轮询：新事件出现后静默 300ms 即返回，空闲最多挂 25 秒。
 func (s *uiServer) handleEvents(w http.ResponseWriter, r *http.Request) {
-	id, ch := s.bus.subscribe()
+	after, _ := strconv.Atoi(r.URL.Query().Get("after"))
+	id, ch := s.bus.subscribe(after)
 	defer s.bus.unsubscribe(id)
 	batch := []uiEvent{}
 	for {

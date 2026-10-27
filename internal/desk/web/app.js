@@ -38,20 +38,40 @@ function makeBridge() {
     if (!r.ok) throw new Error(await r.text());
     return r.json();
   }
+  const listeners = new Map(); // event -> Set<cb>
+  let lastSeq = 0;
+  let pollStarted = false;
+  function dispatch(ev) {
+    if (ev && typeof ev.seq === "number") lastSeq = Math.max(lastSeq, ev.seq);
+    const set = listeners.get(ev.event);
+    if (set) for (const cb of Array.from(set)) { try { cb(ev.data); } catch (_) {} }
+  }
+  // 事件传输：单个长轮询循环分发全部事件（after=seq 断点续传，空档不丢）。
+  // 历史上的 /ws 从无服务端实现，浏览器模式推送一直因此失效。
+  function startPolling() {
+    if (pollStarted) return;
+    pollStarted = true;
+    (async () => {
+      for (;;) {
+        try {
+          const url = "/api/events?t=" + encodeURIComponent(token) + (lastSeq > 0 ? "&after=" + lastSeq : "");
+          const r = await fetch(url);
+          const batch = await r.json();
+          (batch || []).forEach(dispatch);
+        } catch (_) {}
+        await new Promise((res) => setTimeout(res, 50));
+      }
+    })();
+  }
   return {
     mode: "http",
     snapshot: () => rpc("snapshot", []),
     call: (cmd, ...args) => rpc(cmd, args),
     on: (event, cb) => {
-      const ws = new WebSocket(
-        (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws?t=" + encodeURIComponent(token));
-      ws.onmessage = (e) => {
-        try {
-          const m = JSON.parse(e.data);
-          if (m.event === event) cb(m.data);
-        } catch (_) {}
-      };
-      ws.onclose = () => setTimeout(() => bridge.on(event, cb), 1500);
+      let set = listeners.get(event);
+      if (!set) { set = new Set(); listeners.set(event, set); }
+      set.add(cb);
+      startPolling();
     },
     pickFile: () => new Promise((resolve) => {
       const inp = document.getElementById("file-input");
@@ -467,7 +487,12 @@ bridge.on("desk:state", (s) => {
   if (!selectedPeer && S.peers && S.peers.length) selectedPeer = S.peers[0].id;
   render();
 });
+const chatSeen = new Set(); // 回放/重发可能重复推送，按 peer|ts 去重
 bridge.on("desk:chat", (m) => {
+  const key = m.peer + "|" + m.ts;
+  if (chatSeen.has(key)) return;
+  if (chatSeen.size > 500) chatSeen.clear();
+  chatSeen.add(key);
   (chatLog[m.peer] = chatLog[m.peer] || []).push({
     from: m.outgoing ? "我" : peerName(m.peer), text: m.text, ts: m.ts, outgoing: m.outgoing,
   });
