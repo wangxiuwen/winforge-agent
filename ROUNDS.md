@@ -48,6 +48,17 @@
 
 ## 轮次记录
 
+### R58（2026-10-27）
+- 跑覆盖率选点（总 63.7%；0% 全是 input_windows/edgebar 的 Windows 钩子
+  代码——本机无法安全自动化，符合预期）。据此补两件：
+  1. **TestUIEventsHTTPAfter**：/api/events?after=N 的 HTTP 层测试——
+     after=2 只回放 seq=3；缺省 after 不回放（用 2s 超时客户端验证 hold
+     行为）。bus 层逻辑已有测试，这里钉住 handleEvents 的参数解析+flush。
+  2. README 开发节补"desk 自测脚本清单"表（smoke/soak/uia/uia_pair/
+     screenshot/node --check 各一句用途）——五个脚本此前只活在 ROUNDS 里。
+- 坑：测试里写 h.Emit——Hub 的事件方法是小写 emit（未导出），
+  in-package 测试可以直接用。
+
 ### R57（2026-10-27）
 - 回放环边界修正：desk:state（高频全量快照）不再入 512 回放环——否则
   事件密集时 state 会把 chat/transfer/pair 挤出补传窗口，客户端补回来的

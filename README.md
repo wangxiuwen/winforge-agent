@@ -124,3 +124,14 @@ go test ./...
 go vet ./...
 make build
 ```
+
+### desk 自测脚本（Windows，均需先构建对应 exe）
+
+| 脚本 | 用途 |
+| --- | --- |
+| `py -3 smoke_desk.py` | 双实例单轮门禁：发现/配对/消息/32MB 文件/控制状态机/杀进程重连，必跑 |
+| `py -3 soak_desk.py [轮数]` | 长稳 soak：N 轮双向消息+文件+开关共享循环 + 内存采样，抓长尾问题 |
+| `py -3 uia_desk.py` | 桌面窗口 UIA 回归：真实渲染元素+三 tab 真实点击（需 pip 装 pywinauto） |
+| `py -3 uia_pair_desk.py` | 桌面+浏览器双实例端到端：UIA 点击配对弹窗/实时气泡/传输接收全链 |
+| `py -3 screenshot_desk.py` | 生成 README 控制台截图（无头 Chrome） |
+| `node --check internal/desk/web/app.js` | 改前端后必跑（JS 语法门禁） |
