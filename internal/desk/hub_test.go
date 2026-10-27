@@ -1058,35 +1058,26 @@ func TestDialRaceConverges(t *testing.T) {
 	waitFor(t, 20*time.Second, "双方收敛在线", func() bool {
 		return peerViews(a)[0].Online && peerViews(b)[0].Online
 	})
-	// 双向消息都通（仲裁替换窗口内可能瞬态失败，带重试）。
-	tryChat := func(from, to *Hub, text string) error {
-		var err error
+	// 双向消息都通。收敛窗口内发送可能落进被仲裁踢掉的旧会话（静默丢失，
+	// 见"重连收敛窗口"已知边界），与 UI 调用方一致采用"发送+确认"整体重试，
+	// 而不是只重试发送错误。
+	deliver := func(from, to *Hub, text string) bool {
+		toID := to.Snapshot()["self"].(map[string]interface{})["id"].(string)
 		for i := 0; i < 20; i++ {
-			if err = from.SendChat(to.Snapshot()["self"].(map[string]interface{})["id"].(string), text); err == nil {
-				return nil
+			for _, ev := range emitterOf(to).all() {
+				if mm, ok := ev.data.(map[string]interface{}); ok && mm["text"] == text {
+					return true
+				}
 			}
+			_ = from.SendChat(toID, text)
 			time.Sleep(250 * time.Millisecond)
 		}
-		return err
+		return false
 	}
-	if err := tryChat(a, b, "并发后 A2B"); err != nil {
-		t.Fatalf("A→B: %v", err)
+	if !deliver(a, b, "并发后 A2B") {
+		t.Fatalf("A→B 消息未在收敛后送达")
 	}
-	if err := tryChat(b, a, "并发后 B2A"); err != nil {
-		t.Fatalf("B→A: %v", err)
+	if !deliver(b, a, "并发后 B2A") {
+		t.Fatalf("B→A 消息未在收敛后送达")
 	}
-	waitFor(t, 5*time.Second, "双向消息送达", func() bool {
-		seenA, seenB := false, false
-		for _, ev := range emitterOf(a).all() {
-			if mm, ok := ev.data.(map[string]interface{}); ok && mm["text"] == "并发后 B2A" {
-				seenA = true
-			}
-		}
-		for _, ev := range emitterOf(b).all() {
-			if mm, ok := ev.data.(map[string]interface{}); ok && mm["text"] == "并发后 A2B" {
-				seenB = true
-			}
-		}
-		return seenA && seenB
-	})
 }
