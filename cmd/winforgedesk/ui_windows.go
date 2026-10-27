@@ -19,34 +19,34 @@ import (
 var deskWailsCtx context.Context
 
 // DeskApp 是绑定到前端的命令面（window.go.main.DeskApp.*）。
-type DeskApp struct{ h *desk.Hub }
+type Desk struct{ h *desk.Hub }
 
-func (d *DeskApp) Snapshot() map[string]interface{} { return d.h.Snapshot() }
-func (d *DeskApp) PairStart(addr string) error      { return d.h.PairStart(addr) }
-func (d *DeskApp) PairRespond(reqID string, ok bool) {
+func (d *Desk) Snapshot() map[string]interface{} { return d.h.Snapshot() }
+func (d *Desk) PairStart(addr string) error      { return d.h.PairStart(addr) }
+func (d *Desk) PairRespond(reqID string, ok bool) {
 	d.h.PairRespond(reqID, ok)
 }
-func (d *DeskApp) PairOutConfirm(ok bool) { d.h.PairConfirmOut(ok) }
-func (d *DeskApp) PeerPosition(id, pos string) error {
+func (d *Desk) PairOutConfirm(ok bool) { d.h.PairConfirmOut(ok) }
+func (d *Desk) PeerPosition(id, pos string) error {
 	return d.h.PeerPosition(id, pos)
 }
-func (d *DeskApp) PeerToggle(id string, on bool) error { return d.h.PeerToggle(id, on) }
-func (d *DeskApp) PeerRemove(id string) error          { return d.h.PeerRemove(id) }
-func (d *DeskApp) SendChat(id, text string) error      { return d.h.SendChat(id, text) }
-func (d *DeskApp) SendFile(id, path string) error      { return d.h.SendFile(id, path) }
-func (d *DeskApp) TransferRespond(fid string, ok bool) { d.h.TransferRespond(fid, ok) }
-func (d *DeskApp) CancelTransfer(fid string)           { d.h.CancelTransfer(fid) }
-func (d *DeskApp) ChatHistory(peerID string) []desk.ChatMsg {
+func (d *Desk) PeerToggle(id string, on bool) error { return d.h.PeerToggle(id, on) }
+func (d *Desk) PeerRemove(id string) error          { return d.h.PeerRemove(id) }
+func (d *Desk) SendChat(id, text string) error      { return d.h.SendChat(id, text) }
+func (d *Desk) SendFile(id, path string) error      { return d.h.SendFile(id, path) }
+func (d *Desk) TransferRespond(fid string, ok bool) { d.h.TransferRespond(fid, ok) }
+func (d *Desk) CancelTransfer(fid string)           { d.h.CancelTransfer(fid) }
+func (d *Desk) ChatHistory(peerID string) []desk.ChatMsg {
 	return d.h.ChatHistory(peerID)
 }
-func (d *DeskApp) ClearChat(peerID string)     { d.h.DeleteChatHistory(peerID) }
-func (d *DeskApp) TakeControl(id string) error { return d.h.TakeControl(id, -1) }
-func (d *DeskApp) ReleaseControl()             { d.h.ReleaseControl(-1) }
-func (d *DeskApp) ToggleShare(on bool)         { d.h.ToggleShare(on) }
-func (d *DeskApp) OpenPath(path string) error  { return d.h.OpenPath(path) }
+func (d *Desk) ClearChat(peerID string)     { d.h.DeleteChatHistory(peerID) }
+func (d *Desk) TakeControl(id string) error { return d.h.TakeControl(id, -1) }
+func (d *Desk) ReleaseControl()             { d.h.ReleaseControl(-1) }
+func (d *Desk) ToggleShare(on bool)         { d.h.ToggleShare(on) }
+func (d *Desk) OpenPath(path string) error  { return d.h.OpenPath(path) }
 
 // PickAndSendFile 弹系统文件选择框并发送。
-func (d *DeskApp) PickAndSendFile(peerID string) error {
+func (d *Desk) PickAndSendFile(peerID string) error {
 	if deskWailsCtx == nil {
 		return errors.New("窗口未就绪")
 	}
@@ -97,7 +97,7 @@ func runWindowUI(h *desk.Hub, startHidden bool) error {
 			wruntime.WindowHide(ctx)
 			return true
 		},
-		Bind: []interface{}{&DeskApp{h}},
+		Bind: []interface{}{&Desk{h}},
 	})
 }
 

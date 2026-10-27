@@ -3,8 +3,11 @@
 
 /* ================= 桥接 ================= */
 function makeBridge() {
-  if (window.go && window.go.main.Desk) {
-    const b = window.go.main.Desk;
+  // R54 教训：Wails 绑定名=结构体名，曾经叫 DeskApp 而前端找 Desk，
+  // 桌面窗口整体静默降级成"浏览器桥打不通的静态壳"。双名兜底防再犯。
+  const bound = (window.go && window.go.main) && (window.go.main.Desk || window.go.main.DeskApp);
+  if (bound) {
+    const b = bound;
     const rt = window.runtime;
     return {
       mode: "wails",

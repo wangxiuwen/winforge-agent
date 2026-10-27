@@ -155,7 +155,10 @@ func (h *Hub) registerPairRequest(id, name, code string) string {
 	h.mu.Lock()
 	h.pairReqs[reqID] = &pendingPairIn{ReqID: reqID, ID: id, Name: name, Code: code, ch: make(chan bool, 2)}
 	h.mu.Unlock()
-	h.emitPairEvent("request", code, name+" 请求配对")
+	// request 态必须带 reqID：UI 确认按钮靠它回 PairRespond。
+	// 曾漏带导致 UI 点"确认配对码一致"静默无效（R54 修复）。
+	h.emit("desk:pair", map[string]string{"state": "request", "code": code,
+		"message": name + " 请求配对", "reqID": reqID})
 	h.emitState()
 	return reqID
 }
