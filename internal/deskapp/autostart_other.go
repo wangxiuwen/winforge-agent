@@ -9,7 +9,7 @@ import (
 
 var ErrAutostartUnsupported = errors.New("开机自启当前仅支持 Windows（可用系统会话脚本替代）")
 
-func AutostartEnable() error  { return ErrAutostartUnsupported }
+func AutostartEnable() (string, error) { return "", ErrAutostartUnsupported }
 func AutostartDisable() error { return ErrAutostartUnsupported }
 
 func AutostartStatus() (bool, string, error) { return false, "", ErrAutostartUnsupported }

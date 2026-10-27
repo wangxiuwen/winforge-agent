@@ -52,6 +52,17 @@
 
 ## 轮次记录
 
+### R68（2026-10-27）
+- 修 CI Linux 编译断（26fb54a 起两个红）：AutostartEnable 改双返回值时只
+  改了 autostart_windows.go，autostart_other.go 桩仍是旧单值签名——本地
+  Windows `go build ./...` 编译不到那个文件所以一直绿。修：桩同步
+  `("", ErrAutostartUnsupported)`，并用 **R62 沉淀的 WSL 方法预验 Linux
+  build+vet 双绿** 后推送（这次不用等 CI 报）。
+- 注解通道价值再验证：这次的失败 KEY 直接给出 `main.go:79 assignment
+  mismatch`，一眼定位；ci-log 401 仍坏但 KEY 够用。
+- 教训：**改跨平台桩函数签名时，Windows 本地编译通过≠完成**——凡动
+  `*_windows.go/_other.go` 成对文件，必须 WSL 预验（规则 5b 的用途+1）。
+
 ### R67（2026-10-27）★用户需求：基本远程桌面 v1
 - 用户新需求（插话优先）："最好也能实现基本的远程桌面，办公室多台机器
   在一台上控制别的"。v1 实现：**控制对端时实时看到对方屏幕画面**。
