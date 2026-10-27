@@ -48,6 +48,16 @@
 
 ## 轮次记录
 
+### R60（2026-10-27）
+- hotkeyPressed 补测（hub_ctl 最后一个 0% 函数）：TestHotkeyTogglesControl
+  （热键完整往返 idle→控制→idle，B 侧同步回空闲）+ TestHotkeyIdleWithoutPeers
+  （无对端不动作+toast 提示）。至此 hub_ctl 全函数有覆盖。
+- 坑：toast 的 data 是 map[string]string 不是 map[string]interface{}——
+  类型断言失败会让"断言 toast 存在"永远假；testEmitter 的字段名是 name
+  不是 event（in-package 测试先看辅助类型定义）。
+- 教训：写断言前先看一眼被断言数据的真实类型——事件载荷的 map 类型在
+  Go 里是编译期不检查的 interface{}，断言错了不报错只是静默为假。
+
 ### R59（2026-10-27）
 - 覆盖率确认核心交互 **onEdge（推过边缘控制对方/被控推回）此前 0% 覆盖**
   ——产品最核心的判定逻辑从没被测过。新增 edge_intent_test.go 三测试：
