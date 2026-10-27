@@ -54,6 +54,21 @@
 
 ## 轮次记录
 
+### R85（2026-10-28）★RC1 冻结
+- 全验证矩阵最终一遍（RC1 发布候选冻结）：
+  - Windows：go build ✓ / 内部 desk -race 64.2s ✓ / smoke PASS ✓ / UIA PASS ✓
+  - WSL Linux：build + 全套 -race ✓
+  - CI：连绿（多轮）
+- **RC1 = dbe96f2 之后、本轮无代码变更的当前 HEAD（含 R84 全部内容）**。
+  冻结范围：desk 分支当前状态。冻结期间不再合入新功能，仅修用户实测
+  发现的缺陷。
+- 交付物：desk 分支 / dist 最新产物（winforgedesk-windows-amd64.exe，
+  SHA256SUMS-two.txt）/ docs/TESTING.md 实测指引。
+- 待用户实测四项（TESTING.md 10 项清单中自动化不可覆盖的）：窗口拖动/
+  双击、托盘菜单交互、双真机键鼠共享+远程桌面画面、热键切换。通过后
+  ff 合 main 打 tag 发布。
+
+### R84（2026-10-28）
 ### R84（2026-10-28）
 - 落地 frontendError 上报管线（R83 诊断工具转正）：前端 window.error/
   unhandledrejection/console.error → Wails 绑定 FrontendError → hub 日志
