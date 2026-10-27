@@ -52,6 +52,21 @@
 
 ## 轮次记录
 
+### R66（2026-10-27）
+- R65 待办落地：**autostart 覆盖警告**——AutostartEnable 改返回 warn（已有
+  自启项且指向不同时非空），CLI/GUI 两入口打印。真机验证：Temp 副本执行
+  大声提示"原自启项指向 D:\tools\bin…已被覆盖"，正式 exe 恢复时无警告。
+- uia_pair 补桌面发送文件方向的自动化：**三条路全数失败**——①文件路径
+  输入框 UIA SetValue（a11y 层有值、JS .value 仍空）；②剪贴板 ^v（焦点
+  被 powershell 子进程/UIA 点击抢走）；③点"选择文件…"走系统对话框
+  （**对话框根本未弹出**，全顶层窗口枚举证实）。SendFile 的 Wails 绑定
+  与已验证的 SendChat 同族，风险低；**"选择文件…"对话框是否弹出标待
+  用户实测**——若人工点击也不弹，则 PickAndSendFile/OpenFileDialog 是
+  产品 bug 待修（Wails v2 运行时对话框的主线程调度问题）。
+- 门禁：build ✓ / deskapp ✓。
+- 用户插话立项：**基本远程桌面**（办公室多机互控要看屏幕）——R67 起为
+  插话优先工作，预计跨多轮。
+
 ### R65（2026-10-27）
 - **合并预演**：main 停在 29ecf10（两个初始提交），desk 领先 84 提交、
   main 领先 0 → 最终合回 main 是**纯 fast-forward，零冲突障碍**（不动

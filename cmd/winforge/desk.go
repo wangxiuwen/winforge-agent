@@ -47,8 +47,12 @@ func runDeskAutostart(args []string) error {
 	}
 	switch action {
 	case "on":
-		if err := deskapp.AutostartEnable(); err != nil {
+		warn, err := deskapp.AutostartEnable()
+		if err != nil {
 			return err
+		}
+		if warn != "" {
+			fmt.Println(warn)
 		}
 		cmdline, _ := deskapp.AutostartCommand()
 		fmt.Println("已开启开机自启:", cmdline)

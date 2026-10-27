@@ -33,18 +33,26 @@ func AutostartCommand() (string, error) {
 	return `"` + exe + `" desk --start-hidden`, nil
 }
 
-// AutostartEnable 写入自启项。
-func AutostartEnable() error {
+// AutostartEnable 写入自启项；返回覆盖警告（已有自启项且指向不同时非空，
+// 提醒调用方展示——临时副本执行会把正式自启项改写到临时路径，R65 实踩）。
+func AutostartEnable() (string, error) {
 	cmdline, err := AutostartCommand()
 	if err != nil {
-		return err
+		return "", err
 	}
 	k, err := autostartKey()
 	if err != nil {
-		return fmt.Errorf("打开注册表 Run 键失败: %w", err)
+		return "", fmt.Errorf("打开注册表 Run 键失败: %w", err)
 	}
 	defer k.Close()
-	return k.SetStringValue(autostartValueName, cmdline)
+	warn := ""
+	if old, _, err := k.GetStringValue(autostartValueName); err == nil && old != cmdline {
+		warn = "注意：原自启项指向 " + old + "，已被覆盖"
+	}
+	if err := k.SetStringValue(autostartValueName, cmdline); err != nil {
+		return "", err
+	}
+	return warn, nil
 }
 
 // AutostartDisable 删除自启项。

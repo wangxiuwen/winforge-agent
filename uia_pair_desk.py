@@ -241,6 +241,68 @@ def main():
         assert os.path.exists(got) and open(got, "rb").read() == payload, "接收文件不一致"
         print("[ok] 实时传输请求→UIA 点接收→文件落地校验一致")
 
+        # 5) A 桌面发送方向：文件路径输入框+发送文件按钮 → B 落地校验
+        src2 = os.path.join(TMP, "uia-sendout.bin")
+        payload2 = secrets.token_bytes(128 * 1024)
+        with open(src2, "wb") as f:
+            f.write(payload2)
+        # WebView2 内嵌输入框的 UIA 填值/键盘注入都不落 DOM（R66 实测）——
+        # 走"选择文件…"系统对话框：原生 Win32 Edit 的 UIA SetValue 可靠，
+        # 顺带覆盖 PickAndSendFile→OpenFileDialog→SendFile 全链。
+        assert click_button(w, "选择文件…", 8), "选择文件按钮点击失败"
+        time.sleep(2.5)
+        from pywinauto import Desktop
+        dlg = None
+        for _ in range(10):
+            for d in Desktop(backend="uia").windows():
+                try:
+                    if d.process_id() == gui.pid and d.window_text() in ("打开", "Open"):
+                        dlg = d
+                        break
+                except Exception:
+                    pass
+            if dlg:
+                break
+            time.sleep(0.5)
+        if dlg is None:
+            titles = []
+            from pywinauto import Desktop as _D
+            for d2 in _D(backend="uia").windows():
+                try:
+                    titles.append("%d|%s" % (d2.process_id(), d2.window_text()))
+                except Exception:
+                    pass
+            raise SystemExit("文件对话框未出现; 全部顶层窗口=%s" % titles)
+        dlg.set_focus()
+        fn_edit = [c for c in dlg.descendants()
+                   if c.element_info.control_type == "Edit"
+                   and "文件名" in str(c.element_info.name or "")]
+        assert fn_edit, "对话框无文件名输入框"
+        fn_edit[0].set_edit_text(src2)
+        time.sleep(0.3)
+        open_btn = [c for c in dlg.descendants()
+                    if c.element_info.control_type == "Button"
+                    and str(c.element_info.name or "").startswith("打开")]
+        assert open_btn, "对话框无打开按钮"
+        open_btn[0].click_input()
+        got2 = os.path.join(TMP, "dl-b", "uia-sendout.bin")
+        deadline = time.time() + 20
+        sent_ok = False
+        while time.time() < deadline:
+            try:
+                if os.path.exists(got2) and open(got2, "rb").read() == payload2:
+                    sent_ok = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.4)
+        if not sent_ok:
+            import PIL.ImageGrab as IG
+            r = w.rectangle()
+            IG.grab(bbox=(r.left, r.top, r.right, r.bottom)).save(os.path.join(TMP, "sendfail2.png"))
+            raise SystemExit("B 未收到桌面发出的文件; 截图=%s" % os.path.join(TMP, "sendfail2.png"))
+        print("[ok] 桌面路径输入→发送文件→B 落地校验一致")
+
         print("UIA-PAIR PASS")
     except SystemExit as e:
         print("UIA-PAIR FAIL:", e)
