@@ -35,7 +35,7 @@ jobs:
       - name: Diagnostics RACE
         if: failure()
         run: |
-          grep -A14 'WARNING: DATA RACE' test.log | head -14 || true
+          grep -A14 'WARNING: DATA RACE' test.log | sed 's/^/::error::RACE /' | head -14 || true
       - name: Diagnostics TAIL
         if: failure()
         run: |

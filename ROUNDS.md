@@ -48,6 +48,20 @@
 
 ## 轮次记录
 
+### R61（2026-10-27）★用户实测反馈
+- **用户实测桌面窗口：标题栏不能双击、不能拖动窗口**。根因：R4 起开的
+  Wails `DragAndDrop{EnableFileDrop:true}`——WebView 拖放注册在 Windows
+  下会破坏原生标题栏拖动/双击最大化，而它发的 desk:filedrop 事件前端
+  **从未监听**（半成品功能换走了窗口基本操作，与 R53 /ws 同族）。
+  修：整体移除 DragAndDrop 配置与 OnFileDrop 处理器。
+- 顺带修 R49 埋的诊断盲点：Diagnostics RACE 步骤输出没加 `::error::`
+  前缀，race 报告头根本不会成为注解（26fb54a 的 CI race 因此只有 KEY
+  一行看不到栈）。已补 sed 前缀，下次 CI race 可见完整报告。
+- 迭代周期应用户要求改为 45 分钟一轮（共 100 轮上限保留）。
+- 桌面端已重部署（14:56），拖动/双击待用户复验。
+- 教训：R53/R54/R61 三连——**半成品的前端功能比没有更糟**（/ws、
+  filedrop、事件缺 reqID 都是在真实使用时才炸的）；用户实测仍不可替代。
+
 ### R60（2026-10-27）
 - hotkeyPressed 补测（hub_ctl 最后一个 0% 函数）：TestHotkeyTogglesControl
   （热键完整往返 idle→控制→idle，B 侧同步回空闲）+ TestHotkeyIdleWithoutPeers

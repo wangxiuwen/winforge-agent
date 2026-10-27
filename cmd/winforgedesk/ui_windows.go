@@ -79,18 +79,11 @@ func runWindowUI(h *desk.Hub, startHidden bool) error {
 		AssetServer: &assetserver.Options{
 			Assets: desk.WebFS(),
 		},
-		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop:     true,
-			DisableWebViewDrop: false,
-			CSSDropProperty:    "--wails-drop-target",
-		},
+		// 不开 DragAndDrop：WebView 拖放注册会破坏 Windows 原生标题栏
+		// 拖动/双击最大化（R61 用户实测），且 filedrop 事件前端从未监听。
 		OnStartup: func(ctx context.Context) {
 			deskWailsCtx = ctx
 			h.AddEmitter(deskWailsEmitter{})
-			// 拖放文件 → 交给前端按当前选中的对端发送。
-			wruntime.OnFileDrop(ctx, func(_ int, _ int, paths []string) {
-				wruntime.EventsEmit(ctx, "desk:filedrop", paths)
-			})
 		},
 		OnBeforeClose: func(ctx context.Context) bool {
 			// 点关闭只隐藏，托盘常驻；退出走托盘菜单。
