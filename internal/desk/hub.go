@@ -130,6 +130,12 @@ type Hub struct {
 	out map[[16]byte]*outgoingTransfer
 	in  map[[16]byte]*incomingTransfer
 
+	// 传输历史（供 Snapshot 回放，刷新后卡片不丢）；trMu 独立于 h.mu，
+	// 因 emit 的调用方有的持 h.mu 有的不持，不能用同一把锁。
+	trMu    sync.Mutex
+	trHist  map[string]map[string]interface{}
+	trOrder []string
+
 	tempUploads map[string]bool
 	chatHistory map[string][]ChatMsg
 	startupWarn string // 配置损坏自愈等启动期警告，随快照发给 UI 一次性展示
@@ -161,6 +167,7 @@ func NewHub(cfg *Config, cfgPath string, platform Platform, logger *log.Logger) 
 		injButtons:  map[MouseButton]bool{},
 		out:         map[[16]byte]*outgoingTransfer{},
 		in:          map[[16]byte]*incomingTransfer{},
+		trHist:      map[string]map[string]interface{}{},
 		tempUploads: map[string]bool{},
 		chatHistory: map[string][]ChatMsg{},
 		lastTry:     map[string]time.Time{},
@@ -218,12 +225,59 @@ func (h *Hub) AddEmitter(e Emitter) {
 }
 
 func (h *Hub) emit(event string, data interface{}) {
+	if event == "desk:transfer" {
+		if m, ok := data.(map[string]interface{}); ok {
+			h.recordTransfer(m)
+		}
+	}
 	h.emittersMu.Lock()
 	list := append([]Emitter(nil), h.emitters...)
 	h.emittersMu.Unlock()
 	for _, e := range list {
 		e.Emit(event, data)
 	}
+}
+
+// transferHistoryCap 传输历史上限，超出淘汰最早一条。
+const transferHistoryCap = 24
+
+// recordTransfer 把传输事件合并进历史（同 id 字段覆盖，模拟前端 Object.assign）。
+func (h *Hub) recordTransfer(data map[string]interface{}) {
+	id, _ := data["id"].(string)
+	if id == "" {
+		return
+	}
+	h.trMu.Lock()
+	defer h.trMu.Unlock()
+	cur := h.trHist[id]
+	if cur == nil {
+		cur = map[string]interface{}{}
+		h.trHist[id] = cur
+		h.trOrder = append(h.trOrder, id)
+		for len(h.trOrder) > transferHistoryCap {
+			old := h.trOrder[0]
+			h.trOrder = h.trOrder[1:]
+			delete(h.trHist, old)
+		}
+	}
+	for k, v := range data {
+		cur[k] = v
+	}
+}
+
+// transferHistory 按插入序返回历史副本。
+func (h *Hub) transferHistory() []map[string]interface{} {
+	h.trMu.Lock()
+	defer h.trMu.Unlock()
+	out := make([]map[string]interface{}, 0, len(h.trOrder))
+	for _, id := range h.trOrder {
+		m := map[string]interface{}{}
+		for k, v := range h.trHist[id] {
+			m[k] = v
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func (h *Hub) toast(level, text string) {

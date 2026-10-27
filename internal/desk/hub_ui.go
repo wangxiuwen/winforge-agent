@@ -55,6 +55,7 @@ func (h *Hub) Snapshot() map[string]interface{} {
 		"control":   h.ctl,
 		"share":     h.cfg.ShareEnabled,
 		"downloads": h.cfg.DownloadsDir,
+		"transfers": h.transferHistory(),
 	}
 	if h.startupWarn != "" {
 		out["startupWarning"] = h.startupWarn

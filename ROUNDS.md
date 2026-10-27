@@ -43,6 +43,22 @@
 
 ## 轮次记录
 
+### R43（2026-10-27）
+- 传输历史进 Snapshot（R42 留下的已知缺口收口）：emit 对 desk:transfer 统一
+  记录（recordTransfer，独立 trMu——emit 的调用方有的持 h.mu 有的不持，不能
+  共用一把锁），同 id 合并字段（对齐前端 Object.assign 语义），上限 24 条
+  淘汰最早；Snapshot 增 "transfers"，app.js 初始快照与 desk:state 都种子
+  填充进 transfers Map 后渲染。
+- 效果实测：刷新/重开控制台后传输卡片回放（截图确认 firmware-v2.3.bin
+  "已发出 5.0 MB/5.0 MB" 卡片出现，不再"暂无传输任务"）；README 截图随之更新。
+- 测试：新单测 TestTransferHistoryInSnapshot（合并/无 id 忽略/上限淘汰）；
+  冒烟加断言"snapshot 含 done 传输历史"。门禁：node --check ✓ / build ✓ /
+  desk 套件 -race ✓ / go test ./... 仅 internal/agent 已知 Windows 存量失败
+  （与 desk 无关）/ smoke PASS（本轮回环 20.8 MB/s，与 25.5 基线同量级波动）。
+- 桌面端已重部署重启（D:\tools\bin，带 desktop,production tags）。
+- 坑：Platform 是结构体不是接口，NewHub 测试参数写 nil 编译失败，要传
+  Platform{}——写测试先看类型定义。
+
 ### R42（2026-10-27）★P0
 - **P0 修复：已提交的 app.js 整份解析失败**——顶层重复 `let startupWarnShown`
   （第 80/477 行，重复 let = SyntaxError，控制台 JS 全死）。R37 UIA 验证发生在

@@ -141,6 +141,10 @@ def main():
         dt = time.time() - t0
         mbs = len(data) / dt / (1024 * 1024)
         print(f"[ok] 文件 32MB 校验一致 ({dt:.1f}s, {mbs:.1f} MB/s 端到端):", path)
+        snap_tr = rpc(b["base"], b["token"], "snapshot").get("transfers") or []
+        done_tr = [d for d in snap_tr if d.get("state") == "done" and d.get("name") == "payload.bin"]
+        assert done_tr, "snapshot 缺传输历史: %r" % (snap_tr,)
+        print("[ok] 传输历史进 snapshot（刷新可回放）")
         # 4) 控制状态机
         rpc(b["base"], b["token"], "toggleShare", [False])
         time.sleep(0.3)

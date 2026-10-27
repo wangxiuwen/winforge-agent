@@ -453,8 +453,16 @@ function pairWaiting(code) {
 }
 
 /* ================= 服务端/宿主事件 ================= */
+function seedTransfers() {
+  if (!Array.isArray(S.transfers)) return;
+  for (const t of S.transfers) {
+    transfers.set(t.id, Object.assign(transfers.get(t.id) || {}, t));
+  }
+  renderTransfers();
+}
 bridge.on("desk:state", (s) => {
   S = s;
+  seedTransfers();
   if (!chatPeer && S.peers && S.peers.length) { chatPeer = S.peers[0].id; ensureChatLog(chatPeer); }
   if (!selectedPeer && S.peers && S.peers.length) selectedPeer = S.peers[0].id;
   render();
@@ -494,6 +502,7 @@ const deepTab = new URLSearchParams(location.search).get("tab");
 if (deepTab && deepTab !== "share") switchTab(deepTab);
 bridge.snapshot().then((s) => {
   S = s;
+  seedTransfers();
   if (S.peers && S.peers.length) { chatPeer = S.peers[0].id; selectedPeer = S.peers[0].id; }
   render();
 }).catch((e) => toast("error", "初始化失败: " + e));
