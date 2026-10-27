@@ -263,6 +263,15 @@ func (c *Config) MaxFileBytesV() int64  { c.mu.Lock(); defer c.mu.Unlock(); retu
 // SetMaxFileBytes 运行时更新传输上限（只改内存，不落盘）。
 func (c *Config) SetMaxFileBytes(v int64) { c.mu.Lock(); c.MaxFileBytes = v; c.mu.Unlock() }
 
+// SetShareEnabled 更新共享总开关并写盘（持 cfg.mu 完成，避免与并发写者
+// 在 json.Marshal 上竞态——ToggleShare 曾在锁外裸调 SaveConfig 被抓）。
+func (c *Config) SetShareEnabled(path string, on bool) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ShareEnabled = on
+	return SaveConfig(path, c)
+}
+
 // newID 生成 16 字节随机 hex。
 func newID() (string, error) {
 	b := make([]byte, 16)

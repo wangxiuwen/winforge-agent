@@ -53,7 +53,7 @@ func (h *Hub) Snapshot() map[string]interface{} {
 		"peers":     peers,
 		"presence":  presence,
 		"control":   h.ctl,
-		"share":     h.cfg.ShareEnabled,
+		"share":     h.cfg.ShareEnabledV(),
 		"downloads": h.cfg.DownloadsDir,
 		"transfers": h.transferHistory(),
 	}
@@ -362,9 +362,8 @@ func (h *Hub) TransferRespond(fidHex string, ok bool) {
 
 // ToggleShare 共享总开关。
 func (h *Hub) ToggleShare(on bool) {
+	err := h.cfg.SetShareEnabled(h.cfgPath, on)
 	h.mu.Lock()
-	h.cfg.ShareEnabled = on
-	err := SaveConfig(h.cfgPath, h.cfg)
 	active := h.ctl.Role != roleIdle
 	h.mu.Unlock()
 	if err != nil {

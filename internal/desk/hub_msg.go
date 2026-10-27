@@ -91,7 +91,7 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 
 // onFileOffer 收到文件发送请求。
 func (h *Hub) onFileOffer(s *Session, m wireMsg) {
-	if m.Name == "" || m.Size < 0 || m.Size > h.cfg.MaxFileBytes {
+	if m.Name == "" || m.Size < 0 || m.Size > h.cfg.MaxFileBytesV() {
 		_ = s.sendJSON(wireMsg{T: msgFileReject, FID: m.FID})
 		return
 	}
@@ -353,10 +353,11 @@ func newTransferID() [16]byte {
 
 // removeIncompleteLocked 删除校验失败的半成品；只允许下载目录内的文件。
 func (h *Hub) removeIncompleteLocked(path string) {
-	if path == "" || h.cfg.DownloadsDir == "" {
+	dl := h.cfg.DownloadsDirV()
+	if path == "" || dl == "" {
 		return
 	}
-	if !withinDir(h.cfg.DownloadsDir, path) {
+	if !withinDir(dl, path) {
 		return
 	}
 	_ = removeFile(path)

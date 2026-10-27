@@ -12,7 +12,5 @@ func RunTray(h *Hub, openConsole func(), onExit func()) {
 
 // ShareEnabledSnapshot 并发安全的共享开关读取。
 func (h *Hub) ShareEnabledSnapshot() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.cfg.ShareEnabled
+	return h.cfg.ShareEnabledV()
 }

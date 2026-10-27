@@ -345,9 +345,7 @@ func (h *Hub) pairedCountSnapshot() int {
 }
 
 func (h *Hub) shareSnapshot() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.cfg.ShareEnabled
+	return h.cfg.ShareEnabledV()
 }
 
 // acceptLoop 接受 TCP 连接：配对请求或会话握手。

@@ -45,6 +45,29 @@
 
 ## 轮次记录
 
+### R49（2026-10-27）★race 修复
+- 48825b8 的 CI 红=**真 DATA RACE + desk 包跑满 600s 超时**（本地 -race
+  从未输过时序）。R49 的 Diagnostics RACE 步骤还没推上去，本地用
+  `-race -cpu 1,2` 循环压测 3 轮内复现，拿到完整 race 报告。
+- **根因**：ShareEnabled 的"cfg 方法集"规则漏网——写方 ToggleShare 持
+  h.mu 直写字段+锁外裸调 SaveConfig（marshal 全结构体，与持 cfg.mu 的
+  并发写者竞态），读方 session.go:305 裸读；另 Snapshot/shareSnapshot/
+  ShareEnabledSnapshot×2/onCtlTake 五处裸读全靠 h.mu 当挡箭牌（写方走
+  cfg.mu，挡不住）。race 报告的双方正是 ToggleShare vs session sendState。
+- **修复**：新 Config.SetShareEnabled(path,on)（变更+落盘都在 cfg.mu 内）；
+  上述七处裸访问全换 V() 方法；onFileOffer 的 MaxFileBytes 同步换 V()
+  （R46 的 SetMaxFileBytes 让它也成了运行期可变字段）；规则收敛为：
+  **运行期可变字段（Peers/ShareEnabled/MaxFileBytes）必须走方法集，
+  ID/Name 等加载后不可变字段裸读无害**。
+- 验证：修复后 -race -cpu 1,2,4 循环 4 轮全净 + 全套 race ✓ + smoke PASS
+  （仅 internal/agent 已知 Windows 存量失败）。桌面端重部署。
+- CI 600s 超时的解释：race 检测拖慢 + CI 弱机，病态调度下 suite 撑爆
+  10m 默认超时；race 修后应回落。若再红，新加的 Diagnostics RACE
+  （race 报告头 14 行）+ KEY running tests 段会直接给出答案。
+- 教训：**锁不能跨守卫对象**——h.mu 守 hub 状态，cfg.mu 守配置字段，
+  "持了把锁"不等于"这个读安全"；race 要主动加压（-cpu 变体是关键，
+  单 GOMAXPROCS 下时序根本错不开），等 CI 报不如本地压出来。
+
 ### R48（2026-10-27）
 - TestAddrLearning 的 CI 抖动（ea40cf3）根因加固：静态排查全部地址学习
   路径（配对发起方存拨号目标/应答方存空/hello learnPeerAddr/拨号成功回写/

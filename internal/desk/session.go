@@ -302,7 +302,7 @@ func (s *Session) serve() {
 	}()
 	go s.keepalive()
 	sendState := func() {
-		share := s.hub.cfg.ShareEnabled
+		share := s.hub.cfg.ShareEnabledV()
 		_ = s.sendJSON(wireMsg{T: msgState, Name: s.hub.cfg.Name, ShareEnabled: &share,
 			Controlling: s.hub.controllingPeerID(), Port: s.hub.ControlPort()})
 	}

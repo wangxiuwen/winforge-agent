@@ -124,8 +124,9 @@ func (h *Hub) TakeControl(peerID string, yRatio float64) error {
 
 // onCtlTake 对端想控制我。
 func (h *Hub) onCtlTake(s *Session, m wireMsg) {
+	share := h.cfg.ShareEnabledV()
 	h.mu.Lock()
-	if h.ctl.Role != roleIdle || !h.cfg.ShareEnabled {
+	if h.ctl.Role != roleIdle || !share {
 		h.mu.Unlock()
 		_ = s.sendJSON(wireMsg{T: msgCtlDeny})
 		return
