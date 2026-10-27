@@ -42,11 +42,25 @@
    里带"冒号+空格"会把 workflow 打成 startup failure 且 jobs 为空）：
    `py -3 -c "import yaml,io; yaml.safe_load(io.open('.github/workflows/ci.yml',encoding='utf-8'))"`（pyyaml 已装）。
 5. GOPROXY 必须设 `https://mirrors.aliyun.com/goproxy/,direct`（本机 goproxy.cn DNS 不通，7897 代理不常开）。
+5b. **Linux 变体本地复现**（R62 沉淀）：CI 的 Linux 编译变体可用 WSL 跑——
+   `wsl -e bash -lc "cd /mnt/d/company/wangxiuwen/workspace/winforge-agent && export GOPROXY=https://mirrors.aliyun.com/goproxy/,direct && go test ./internal/desk/... -race -cpu 1,2"`
+   （WSL 自带 go1.22 会自动拉 go.mod 的 1.26 toolchain；全套约 1-2 分钟）。
+   Windows 本地复现不了的 CI race/编译问题先用它。
 6. 一轮一个 commit：`desk(R<N>): <做了什么>`，并把本轮记录追加到本文件"轮次记录"。
 7. 完成一轮 push 一次：`git push origin desk`。不 force push、不 rebase、不动 main。
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R62（2026-10-27）
+- 26fb54a 的 CI DATA RACE 追查：本地 Windows -race -cpu 1,2,4 十轮全净 →
+  沉淀 **WSL Linux 本地复现能力**（每轮规则 5b）：WSL 里跑 Linux 编译变体
+  全套 -race -cpu 1,2 ×3 也干净——竞争是 CI 共享 runner 的极端时序，
+  两平台本地都压不出。R49 修的 RACE 注解前缀下次 CI 红时会给出完整栈，
+  届时精确修；目检 savedX/savedY 双端都在 h.mu 下，无裸访问。
+- 热键 Ctrl+Alt+D 合成注入验证维持不做（R57 评估：真劫持鼠标+可能不触发
+  RegisterHotKey），待用户实测。
+- 本轮无代码变更（调研+规则沉淀），ROUNDS.md 单独提交。
 
 ### R61（2026-10-27）★用户实测反馈
 - **用户实测桌面窗口：标题栏不能双击、不能拖动窗口**。根因：R4 起开的
