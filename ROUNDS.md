@@ -52,6 +52,20 @@
 
 ## 轮次记录
 
+### R74（2026-10-27）
+- 实测助攻：docs/TESTING.md 双机实测指引（准备/10 项清单/已知边界/日志
+  位置），构建最新 dist/winforgedesk-windows-amd64.exe（含远程桌面+光标
+  叠加+拖动修复）+SHA256SUMS-two.txt。
+- 差点重踩 R36 tags 坑：dist 产物构建漏 `-tags "desktop,production"`
+  会被静态壳版覆盖——发版产物必须走带 tags 的构建命令（或 Makefile）。
+
+### R73（2026-10-27）（追记：上轮漏写本文件）
+- 远程桌面静止画面跳帧：JPEG 编码确定性，与上帧 bytes.Equal 相同即跳发
+  （静态画面零带宽），3 色轮换唯一帧≤3 断言（TestScreenStreamSkipsStaticFrames）。
+- 顺平 screen 相关文件 gofmt。
+- ★上轮 commit 漏了 ROUNDS.md 更新——规则 4 的"更新轮次记录"也是门禁
+  的一部分，提交前应 grep 确认。
+
 ### R72（2026-10-27）★race 修复（RACE 注解首次完整实战）
 - 7191cab 的 CI 红给了**第一份完整 race 栈**（RACE 注解前缀修复后首次
   实战成功）：写方=hub_msg.go:41 `s.peerName = m.Name`（serve 读循环），
