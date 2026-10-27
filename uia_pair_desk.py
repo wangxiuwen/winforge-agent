@@ -197,7 +197,39 @@ def main():
         assert wait_name(w, "实时气泡1", 5), "第二条气泡缺失"
         print("[ok] 桌面窗口实时消息气泡渲染（Wails 事件链路验证）")
 
-        # 3) 实时传输请求 → 接收按钮 → 点击 → 落地校验
+        # 3) A→B 方向：A 输入框真实输入+点发送（Wails 双参绑定 SendChat 未测过）
+        edits = [c for c in w.descendants()
+                 if c.element_info.control_type == "Edit" and "消息" in str(c.element_info.name or "")]
+        if not edits:
+            edits = [c for c in w.descendants() if c.element_info.control_type == "Edit"]
+        assert edits, "找不到聊天输入框"
+        edits[-1].click_input()
+        edits[-1].type_keys("hellofromdesktop", pause=0.03)
+        assert click_button(w, "发送", 6), "发送按钮点击失败"
+        a_id = rpc(b["base"], b["token"], "snapshot")["peers"][0]["id"]
+        deadline = time.time() + 15
+        got_b = False
+        while time.time() < deadline:
+            try:
+                if any(m.get("text") == "hellofromdesktop"
+                       for m in rpc(b["base"], b["token"], "chatHistory", [a_id]) or []):
+                    got_b = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.4)
+        if not got_b:
+            import PIL.ImageGrab as IG
+            r = w.rectangle()
+            IG.grab(bbox=(r.left, r.top, r.right, r.bottom)).save(os.path.join(TMP, "sendfail.png"))
+            snap_b = rpc(b["base"], b["token"], "snapshot")
+            hist_b = rpc(b["base"], b["token"], "chatHistory", [a_id])
+            raise SystemExit("B 未收到; B.peers=%r\nB.hist(%s)=%r 截图=%s"
+                             % (snap_b.get("peers"), a_id, hist_b,
+                                os.path.join(TMP, "sendfail.png")))
+        print("[ok] 桌面输入框→发送→B 收到（Wails 双参调用验证）")
+
+        # 4) 实时传输请求 → 接收按钮 → 点击 → 落地校验
         src = os.path.join(TMP, "uia-payload.bin")
         payload = secrets.token_bytes(256 * 1024)
         with open(src, "wb") as f:

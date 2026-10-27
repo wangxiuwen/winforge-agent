@@ -7,3 +7,4 @@
 config.json
 profiles/
 
+__pycache__/
