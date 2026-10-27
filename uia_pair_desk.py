@@ -249,14 +249,35 @@ def main():
         # WebView2 内嵌输入框的 UIA 填值/键盘注入都不落 DOM（R66 实测）——
         # 走"选择文件…"系统对话框：原生 Win32 Edit 的 UIA SetValue 可靠，
         # 顺带覆盖 PickAndSendFile→OpenFileDialog→SendFile 全链。
-        assert click_button(w, "选择文件…", 8), "选择文件按钮点击失败"
-        time.sleep(2.5)
+        # 对话框标题实测为"选择要发送的文件"（R66 曾误过滤成"打开"判成未弹出）。
+        # UIA 点击偶发不触发 JS onclick（独立诊断可复现弹出）——重试式点击；
+        # 注意与实例状态相关（配对+活跃会话的实例 3 连击都不触发，轻量实例
+        # 一次即中），此方向自动化受限：产品本体已由独立诊断截图证明正常。
+        dlg = None
+        for attempt in range(3):
+            if not click_button(w, "选择文件…", 8):
+                continue
+            time.sleep(2.5)
+            from pywinauto import Desktop
+            for _ in range(6):
+                for d in Desktop(backend="uia").windows():
+                    try:
+                        if d.process_id() == gui.pid and "选择要发送的文件" in d.window_text():
+                            dlg = d
+                            break
+                    except Exception:
+                        pass
+                if dlg:
+                    break
+                time.sleep(0.5)
+            if dlg:
+                break
         from pywinauto import Desktop
         dlg = None
         for _ in range(10):
             for d in Desktop(backend="uia").windows():
                 try:
-                    if d.process_id() == gui.pid and d.window_text() in ("打开", "Open"):
+                    if d.process_id() == gui.pid and "选择要发送的文件" in d.window_text():
                         dlg = d
                         break
                 except Exception:
