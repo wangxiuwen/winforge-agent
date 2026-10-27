@@ -18,8 +18,15 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "autostart" {
-		if err := runAutostart(os.Args[2:]); err != nil {
+	// 兼容 CLI 语法 `winforgedesk desk autostart ...`（与 `winforge desk
+	// autostart` 对齐）：不兼容时该写法会静默回落成启动完整 hub——多实例
+	// 抢端口（R65 实踩）。
+	args := os.Args[1:]
+	if len(args) >= 2 && args[0] == "desk" && args[1] == "autostart" {
+		args = args[1:]
+	}
+	if len(args) > 0 && args[0] == "autostart" {
+		if err := runAutostart(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "错误:", err)
 			os.Exit(1)
 		}

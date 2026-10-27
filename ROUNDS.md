@@ -52,6 +52,20 @@
 
 ## 轮次记录
 
+### R65（2026-10-27）
+- **合并预演**：main 停在 29ecf10（两个初始提交），desk 领先 84 提交、
+  main 领先 0 → 最终合回 main 是**纯 fast-forward，零冲突障碍**（不动
+  分支，等用户实测确认后执行）。
+- 顺带抓到并修一个真问题：**autostart 语法不一致**——CLI 是
+  `winforge desk autostart ...`，GUI 入口只认 `winforgedesk.exe
+  autostart ...`（无 desk 前缀）；用 CLI 语法调 GUI exe 会**静默回落成
+  启动完整 hub**（本轮实踩：起第二个实例抢 41831 端口报错）。修：GUI
+  入口兼容 `desk autostart` 语法；README 命令清单补 GUI 同义行。
+- 另一个实踩记录：**autostart on 把"当前 exe 路径"写进 HKCU Run**——用
+  Temp 测试副本执行会把正式自启项污染成 Temp 路径（本轮已用正式 exe
+  恢复）。改进候选（未做）：写前检测已有项路径不同则警告。
+- 门禁：build ✓ / 兼容语法真机验证（不再起 hub）✓。
+
 ### R64（2026-10-27）
 - GUI 日志按配置名分离：OpenRotatingLog(configPath)——`--config` 非默认时
   日志写 `<配置名>.log`（默认仍是 %APPDATA%/winforge/desk.log）。此前多

@@ -97,6 +97,7 @@ winforgedesk.exe --start-hidden     # 开机自启形态：只留托盘
 winforge desk                       # CLI 入口：浏览器控制台（127.0.0.1，随机令牌）
 winforge desk --no-tray             # 无头模式（自动化自测入口）
 winforge desk autostart on|off|status
+winforgedesk.exe autostart on|off|status   # GUI 入口同义（desk 前缀可省可留）
 ```
 
 默认端口：发现 41832/UDP、会话 41831/TCP、控制台 41830（仅 127.0.0.1），
