@@ -33,7 +33,9 @@
 2. 每轮只做清单里 1-2 项，做完必须：`go build ./...` + `go test ./internal/desk/ -count=1 -timeout 180s`
    （涉改共享代码再跑 `go test ./...`）+ 冒烟 `py -3 smoke_desk.py`（涉及传输/协议时）；
    改了 web 前端必须 `node --check internal/desk/web/app.js`（R42 的 P0 教训：
-   重复 let 声明=整份 JS 解析失败，UI 全死，go 门禁和 HTTP 冒烟都测不到）。
+   重复 let 声明=整份 JS 解析失败，UI 全死，go 门禁和 HTTP 冒烟都测不到）；
+   改了窗口/UI 交互或 Wails 壳再跑 `py -3 uia_desk.py`（R45，Windows 本机，
+   需要 pip 装 pywinauto；与用户实例按 PID 共存，不碰托盘）。
 3. 本机 vet 对 input_windows.go 的 unsafe.Pointer 告警是 Win32 钩子惯用写法，CI(Linux) 不编译该文件，忽略。
 4. `internal/agent` 存量测试在 Windows 本地失败（与 desk 无关，CI Linux 通过为准），不要顺手去修范围外代码。
 5. GOPROXY 必须设 `https://mirrors.aliyun.com/goproxy/,direct`（本机 goproxy.cn DNS 不通，7897 代理不常开）。
@@ -42,6 +44,21 @@
 8. 用户插话优先于清单顺序；构建失败超过 3 次尝试就记录现状收尾，不硬提交坏状态。
 
 ## 轮次记录
+
+### R45（2026-10-27）
+- R37 的 ad-hoc UIA 验证固化为仓库资产 `uia_desk.py`：自行 go build
+  （desktop,production tags）→ 临时配置（端口全 0）+ --no-tray 起真 GUI
+  进程 → pywinauto/UIA 按窗口标题+PID 过滤窗口（与用户运行实例共存，
+  不杀托盘）→ 走查两遍触发 WebView2 辅助功能 → 断言静态元素 + 真实点击
+  传输/控制/共享三个 tab 断言各页内容。连跑两次全 PASS。
+- **发现并记录 WebView2 UIA 局限**：JS 动态改写的文本节点（热键文案、设备
+  列表、聊天气泡等）不进 UIA 树，静态 HTML 文本不受影响——热键断言降级为
+  [info]，门禁以静态 DOM + 真实点击后的元素出现为准。此前 R37/R42 命中的
+  全是静态文本，回头看与此一致。
+- 每轮规则第 2 条追加：改窗口/UI 交互或 Wails 壳时跑 uia_desk.py。
+- 脚本三次迭代踩坑：JS 填充文案不能作为就绪断言（轮询 8s 也不出现）；
+  click_input 前必须 set_focus；临时配置端口写 0 才能避开用户实例端口。
+- 本轮无 Go/web 代码变更；门禁照跑（build/test 全绿）。
 
 ### R44（2026-10-27）
 - d59f382 CI failure 诊断（签名与 998d08e 完全相同：日志停在 desk 配对中间、
