@@ -148,6 +148,8 @@ def main():
         mem1 = mem_mb("winforge-desk.exe")
         print("[ok] soak PASS: %d 轮共 %.0fs, 进程内存 %.1fMB → %.1fMB"
               % (cycles, time.time() - t0, mem0, mem1))
+        if mem1 > 150:
+            print("[warn] 双实例合计内存 %.1fMB 偏高，建议复查句柄/缓冲" % mem1)
     finally:
         subprocess.run(["taskkill", "/F", "/IM", "winforge-desk.exe"], capture_output=True)
 
