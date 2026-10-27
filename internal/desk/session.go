@@ -119,6 +119,7 @@ type Session struct {
 	// 双端并发拨号时用它做唯一性仲裁（保留 initiatorID 较小者）。
 	initiatorID string
 	sendMu      sync.Mutex
+	nameMu      sync.RWMutex // 保护 peerName（serve 写 / hub 多处读）
 	peerName    string
 	peerShare   bool
 	peerCtl     string // 对端正在控制的第三方
@@ -142,6 +143,8 @@ func (s *Session) Alive() bool {
 
 // PeerName 返回对端最新名字。
 func (s *Session) PeerName() string {
+	s.nameMu.RLock()
+	defer s.nameMu.RUnlock()
 	if s.peerName != "" {
 		return s.peerName
 	}

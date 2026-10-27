@@ -38,7 +38,9 @@ func (h *Hub) handleSessionMessage(s *Session, m wireMsg) bool {
 	case msgPong:
 	case msgState:
 		if m.Name != "" {
+			s.nameMu.Lock()
 			s.peerName = m.Name
+			s.nameMu.Unlock()
 		}
 		if m.ShareEnabled != nil {
 			s.peerShare = *m.ShareEnabled

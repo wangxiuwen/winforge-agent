@@ -52,6 +52,16 @@
 
 ## 轮次记录
 
+### R72（2026-10-27）★race 修复（RACE 注解首次完整实战）
+- 7191cab 的 CI 红给了**第一份完整 race 栈**（RACE 注解前缀修复后首次
+  实战成功）：写方=hub_msg.go:41 `s.peerName = m.Name`（serve 读循环），
+  读方=PeerName()（Snapshot/ControlState/toast 多处）——对端改名（state
+  消息）与 hub 任意读名字路径并发，自 R1 潜伏。
+- 修：Session 加 nameMu RWMutex，写方（state 处理）写锁、PeerName() 读锁。
+- 验证：-race -cpu 1,2,4 ×3 全净 + smoke PASS + WSL Linux build/vet 双绿。
+- 教训：RACE 注解前缀修复（R61）让 CI race 从"只能看到一个 WARNING 行"
+  变成"14 行栈直接可读"——诊断通道的每一分投入都会在下一次故障里回本。
+
 ### R71（2026-10-27）
 - **"选择文件…"对话框疑云解除（产品无 bug）**：独立干净实例诊断——点击后
   对话框正常弹出（截图为证），**实际标题是"选择要发送的文件"**；此前
