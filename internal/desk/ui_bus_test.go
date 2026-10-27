@@ -83,3 +83,29 @@ drain:
 		t.Fatalf("回放应恰为最近 256 条: first=%d last=%d", first, last)
 	}
 }
+
+// desk:state 高频快照不进回放环：密集 state 不应把关键事件挤出补传窗口。
+func TestUIBusStateNotReplayed(t *testing.T) {
+	b := newUIBus()
+	b.Emit("desk:chat", "keep-me") // seq 1
+	for i := 0; i < uiBusHistCap+10; i++ {
+		b.Emit("desk:state", nil) // 密集 state 不占环
+	}
+	id, ch := b.subscribe(0)
+	select {
+	case ev := <-ch:
+		b.unsubscribe(id)
+		t.Fatalf("after=0 不应回放, got seq=%d", ev.Seq)
+	default:
+	}
+	// after=0 不回放；用 after=... 无从构造，直接验证环内容：回放触发后
+	// 只有 chat 一条（state 全部被排除在环外）。
+	b.mu.Lock()
+	n := len(b.hist)
+	b.mu.Unlock()
+	if n != 1 {
+		b.unsubscribe(id)
+		t.Fatalf("state 不应入回放环: hist=%d", n)
+	}
+	b.unsubscribe(id)
+}

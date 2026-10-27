@@ -341,7 +341,7 @@ func (h *Hub) nameSnapshot() string {
 func (h *Hub) pairedCountSnapshot() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return len(h.cfg.Peers)
+	return len(h.cfg.PeersSnapshot())
 }
 
 func (h *Hub) shareSnapshot() bool {

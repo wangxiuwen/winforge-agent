@@ -48,6 +48,22 @@
 
 ## 轮次记录
 
+### R57（2026-10-27）
+- 回放环边界修正：desk:state（高频全量快照）不再入 512 回放环——否则
+  事件密集时 state 会把 chat/transfer/pair 挤出补传窗口，客户端补回来的
+  全是无用 state（重连本就会重新拉 snapshot）。新增
+  TestUIBusStateNotReplayed。
+- 方法集清剿**第三批漏网**：`cfg.Peers` 直接遍历还有 5 处（hub_ctl 的
+  边缘推挤/链式切换/热键路径×2 + pairedCountSnapshot）——R49 只修了
+  connectMissing 一处。全部换 PeersSnapshot()，重新全量 grep 计数归零。
+- 热键 Ctrl+Alt+D 的自动化验证**评估后不做**：hotkeyPressed 的动作是
+  TakeControl（真起 Windows 钩子+注入），合成注入会真劫持本机鼠标且有
+  不触发 RegisterHotKey 的先例——维持"待用户实测"。
+- 门禁：bus 三测试 ✓ / 全套 -race 51.3s ✓ / smoke PASS。
+- 教训：清剿类修复（race/直接访问）**必须按字段全域 grep 计数归零收尾**，
+  R49 修了一处就说"清零"、R51 补了 3 处、R57 又补 5 处——每轮都该以
+  "全仓该字段裸访问=0"为完成标准而不是"修了发现的"。
+
 ### R56（2026-10-27）
 - 补 TestChatHistoryCapTrim：聊天历史上限裁剪（>500 条裁旧留新，首末条
   精确断言）+ 重启恢复后仍为上限条数——此前 TestChatPersistence 只测

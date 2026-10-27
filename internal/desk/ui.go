@@ -44,9 +44,13 @@ func (b *uiBus) Emit(event string, data interface{}) {
 	b.mu.Lock()
 	b.seq++
 	ev := uiEvent{Seq: b.seq, Event: event, Data: data}
-	b.hist = append(b.hist, ev)
-	if len(b.hist) > uiBusHistCap {
-		b.hist = b.hist[len(b.hist)-uiBusHistCap:]
+	// desk:state 是高频全量快照，不进回放环——否则会把 chat/transfer/pair
+	// 等低频关键事件挤出窗口；客户端重连本就会重新拉 snapshot。
+	if event != "desk:state" {
+		b.hist = append(b.hist, ev)
+		if len(b.hist) > uiBusHistCap {
+			b.hist = b.hist[len(b.hist)-uiBusHistCap:]
+		}
 	}
 	subs := make([]chan uiEvent, 0, len(b.subs))
 	for _, ch := range b.subs {

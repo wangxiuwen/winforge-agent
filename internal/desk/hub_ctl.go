@@ -50,7 +50,7 @@ func (h *Hub) onEdge(edge Edge, yRatio float64) {
 	switch role {
 	case roleIdle:
 		// 找该方位上启用的对端 → 发起控制。
-		for _, p := range h.cfg.Peers {
+		for _, p := range h.cfg.PeersSnapshot() {
 			if !p.Enabled || p.Position == "" {
 				continue
 			}
@@ -73,7 +73,7 @@ func (h *Hub) onEdge(edge Edge, yRatio float64) {
 			return
 		}
 		// 链式：本机另一侧的方位对端，请控制器把输入链切过去。
-		for _, p := range h.cfg.Peers {
+		for _, p := range h.cfg.PeersSnapshot() {
 			if p.Enabled && p.ID != peerID && p.Position != "" && edgeForPosition(p.Position) == edge {
 				if s := h.sessionTo(peerID); s != nil {
 					_ = s.sendJSON(wireMsg{T: msgCtlChain, FID: p.ID, Y: yRatio})
@@ -468,14 +468,14 @@ func (h *Hub) hotkeyPressed() {
 	switch role {
 	case roleIdle:
 		// 优先有方位的对端，其次任一在线对端。
-		for _, p := range h.cfg.Peers {
+		for _, p := range h.cfg.PeersSnapshot() {
 			if p.Enabled && p.Position != "" {
 				if err := h.TakeControl(p.ID, -1); err == nil {
 					return
 				}
 			}
 		}
-		for _, p := range h.cfg.Peers {
+		for _, p := range h.cfg.PeersSnapshot() {
 			if p.Enabled {
 				if err := h.TakeControl(p.ID, -1); err == nil {
 					return
