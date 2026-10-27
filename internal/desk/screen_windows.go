@@ -15,10 +15,10 @@ import (
 // v1 全帧无差异编码，宽超过 maxW 时按比例缩小（GO 内最近邻采样）。
 
 var (
-	screenGdi32         = windows.NewLazySystemDLL("gdi32.dll")
-	procGetDC           = user32.NewProc("GetDC")
-	procReleaseDC       = user32.NewProc("ReleaseDC")
-	procGetCursorPosScr = user32.NewProc("GetCursorPos")
+	screenGdi32            = windows.NewLazySystemDLL("gdi32.dll")
+	procGetDC              = user32.NewProc("GetDC")
+	procReleaseDC          = user32.NewProc("ReleaseDC")
+	procGetCursorPosScr    = user32.NewProc("GetCursorPos")
 	procCreateCompatibleDC = screenGdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC           = screenGdi32.NewProc("DeleteDC")
 	procCreateDIBSection   = screenGdi32.NewProc("CreateDIBSection")

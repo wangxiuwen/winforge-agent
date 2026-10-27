@@ -56,13 +56,13 @@ func (f *fakeInjector) Released() int {
 
 // fakePlatform 提供可控的捕获/注入。
 type fakePlatform struct {
-	mu        sync.Mutex
-	inj       *fakeInjector
-	capture   chan InputEvent
-	hotkeyCh  chan struct{}
-	escapeCh  chan struct{}
-	cursor    [2]int32
-	indicator []string // "on/controller", "on/controlled", "off"
+	mu            sync.Mutex
+	inj           *fakeInjector
+	capture       chan InputEvent
+	hotkeyCh      chan struct{}
+	escapeCh      chan struct{}
+	cursor        [2]int32
+	indicator     []string // "on/controller", "on/controlled", "off"
 	captureScreen func(maxW, quality int) ([]byte, int, int, error)
 }
 

@@ -1,6 +1,7 @@
 package desk
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"time"
@@ -10,10 +11,10 @@ import (
 // 控制端经 desk:screen 事件在控制视图显示。v1 全帧无差异编码。
 
 const (
-	screenDefaultFPS    = 3
-	screenMaxWidth      = 1600
-	screenJPEGQuality   = 60
-	screenFrameHdrLen   = 12 // [4B W][4B H][4B BE seq]
+	screenDefaultFPS  = 3
+	screenMaxWidth    = 1600
+	screenJPEGQuality = 60
+	screenFrameHdrLen = 12 // [4B W][4B H][4B BE seq]
 )
 
 // screenLoopState 每 Hub 一份的推流循环状态。
@@ -43,6 +44,7 @@ func (h *Hub) startScreenLoop(s *Session, fps int) {
 		interval := time.Second / time.Duration(fps)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		var last []byte
 		for {
 			select {
 			case <-st.stop:
@@ -61,6 +63,11 @@ func (h *Hub) startScreenLoop(s *Session, fps int) {
 			if err != nil {
 				continue
 			}
+			// 静止画面跳帧：JPEG 编码确定，与上帧相同即无变化，零带宽。
+			if last != nil && bytes.Equal(jpegBytes, last) {
+				continue
+			}
+			last = append(last[:0], jpegBytes...)
 			st.seq++
 			payload := make([]byte, screenFrameHdrLen+len(jpegBytes))
 			binary.BigEndian.PutUint32(payload[0:4], uint32(w))
