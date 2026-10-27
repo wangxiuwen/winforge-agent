@@ -38,6 +38,9 @@
    需要 pip 装 pywinauto；与用户实例按 PID 共存，不碰托盘）。
 3. 本机 vet 对 input_windows.go 的 unsafe.Pointer 告警是 Win32 钩子惯用写法，CI(Linux) 不编译该文件，忽略。
 4. `internal/agent` 存量测试在 Windows 本地失败（与 desk 无关，CI Linux 通过为准），不要顺手去修范围外代码。
+4b. 改了 `.github/workflows/ci.yml` 必须先本地验 YAML（R49 教训：`run:` 裸标量
+   里带"冒号+空格"会把 workflow 打成 startup failure 且 jobs 为空）：
+   `py -3 -c "import yaml,io; yaml.safe_load(io.open('.github/workflows/ci.yml',encoding='utf-8'))"`（pyyaml 已装）。
 5. GOPROXY 必须设 `https://mirrors.aliyun.com/goproxy/,direct`（本机 goproxy.cn DNS 不通，7897 代理不常开）。
 6. 一轮一个 commit：`desk(R<N>): <做了什么>`，并把本轮记录追加到本文件"轮次记录"。
 7. 完成一轮 push 一次：`git push origin desk`。不 force push、不 rebase、不动 main。
@@ -67,6 +70,11 @@
 - 教训：**锁不能跨守卫对象**——h.mu 守 hub 状态，cfg.mu 守配置字段，
   "持了把锁"不等于"这个读安全"；race 要主动加压（-cpu 变体是关键，
   单 GOMAXPROCS 下时序根本错不开），等 CI 报不如本地压出来。
+- 6aaf593 追加翻车：R49 顺手的 ci.yml 编辑把 YAML 弄坏（`run:` 裸标量里
+  `'WARNING: DATA RACE'` 的"冒号+空格"被解析成新映射键）→ run 显示
+  failure 但 **jobs 为空**（startup failure）→ race 修复那版其实没跑过 CI。
+  修复：三步诊断全部块标量化；每轮规则加 4b（改 ci.yml 必须本地验 YAML，
+  pyyaml 已装）。本条随 YAML 修复一起推送，CI 才真正复验 race 修复。
 
 ### R48（2026-10-27）
 - TestAddrLearning 的 CI 抖动（ea40cf3）根因加固：静态排查全部地址学习

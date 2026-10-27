@@ -30,13 +30,16 @@ jobs:
           }
       - name: Diagnostics KEY
         if: failure()
-        run: grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed|_test\.go:[0-9]+:|running tests:' test.log | sed 's/^/::error::KEY /' | head -10 || true
+        run: |
+          grep -E 'FAIL|panic|DATA RACE|fatal error|timed out|shutdown signal|exit status|cannot|undefined|build failed|_test\.go:[0-9]+:|running tests:' test.log | sed 's/^/::error::KEY /' | head -10 || true
       - name: Diagnostics RACE
         if: failure()
-        run: grep -A14 'WARNING: DATA RACE' test.log | head -14 || true
+        run: |
+          grep -A14 'WARNING: DATA RACE' test.log | head -14 || true
       - name: Diagnostics TAIL
         if: failure()
-        run: tail -8 test.log | sed 's/^/::error::TAIL /' || true
+        run: |
+          tail -8 test.log | sed 's/^/::error::TAIL /' || true
       - name: Publish test log
         if: failure()
         continue-on-error: true
