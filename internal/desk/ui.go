@@ -297,14 +297,15 @@ func (s *uiServer) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	size, err := io.Copy(tmp, io.LimitReader(part, s.hub.cfg.MaxFileBytes+1))
+	limit := s.hub.cfg.MaxFileBytesV()
+	size, err := io.Copy(tmp, io.LimitReader(part, limit+1))
 	saveErr := tmp.Close()
 	if err != nil || saveErr != nil {
 		_ = os.Remove(tmp.Name())
 		http.Error(w, "保存失败", http.StatusInternalServerError)
 		return
 	}
-	if size > s.hub.cfg.MaxFileBytes {
+	if size > limit {
 		_ = os.Remove(tmp.Name())
 		http.Error(w, "文件超过大小上限", http.StatusRequestEntityTooLarge)
 		return

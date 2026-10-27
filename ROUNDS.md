@@ -48,6 +48,18 @@
 
 ## 轮次记录
 
+### R51（2026-10-27）
+- R49 方法集清剿的**漏网之鱼补刀**：ui.go 上传处理器两处 MaxFileBytes 裸读
+  + hub_ui.go SendFile 的 openSenderFile 一处——R49 的 grep 输出被 head -20
+  截断没看全（教训：清剿类排查别用 head 截输出，`-c` 计数+全量落盘）。
+  全部换 MaxFileBytesV()；config.go 加载期归一化的裸访问按"构造后不可变"
+  原则保留。
+- 新增 TestUIUploadOverLimit：超限上传 413（大小检查在 SendFile 之前，
+  无需真实对端即可独立触发）；限内+对端不存在走 400 业务错误。
+- 验证：新单测 ✓ / 全套 -race 20.3s ✓。
+- 教训：批量修复后要"重新全量 grep + 计数核对"，截断输出会漏项——
+  race 家族这类"清一个少一个"的活必须以计数归零收尾。
+
 ### R50（2026-10-27）
 - 63a14e2（YAML 修复后首个真实 CI run）红：**race 已修掉**（Diagnostics RACE
   无输出），挂在 TestDialRaceConverges"双向消息送达"5s 超时——诊断通道

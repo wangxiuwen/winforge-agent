@@ -280,7 +280,7 @@ func (h *Hub) SendChat(peerID, text string) error {
 
 // SendFile 发送本地文件。
 func (h *Hub) SendFile(peerID, path string) error {
-	sf, err := openSenderFile(path, h.cfg.MaxFileBytes)
+	sf, err := openSenderFile(path, h.cfg.MaxFileBytesV())
 	if err != nil {
 		return err
 	}
