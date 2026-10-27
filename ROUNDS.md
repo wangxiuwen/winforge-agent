@@ -52,6 +52,19 @@
 
 ## 轮次记录
 
+### R69（2026-10-27）
+- 远程桌面可用性关键项：**被控端光标叠加**——控制端此前看不到对方屏幕上
+  的光标在哪（注入没有视觉反馈）。抓屏后经 GetCursorPos 取被控端物理
+  光标（=控制者移动的那支），按抓屏缩放比例画白边红心圆点再编码。
+- 修一个 x/sys 经典陷阱：`LazyProc.Call` 的 err 是 GetLastError，**成功
+  时也常非 nil**——drawCursorMarker 判 err 提前返回导致标记从未画上
+  （隔离测试 0 红像素抓包）。改为判 r1 返回值后，隔离 81 红像素 +
+  SetCursorPos 居中→抓帧→中心红点断言 全过。
+- 热键测试又踩 R59 同款坑（第二次按键前没等 B 被控，release 先于 take
+  到达被丢弃）——补等待后 -race -cpu 1,2 count=6 全过。这个坑出现两次
+  了，教训升级：**涉及 take/release 的测试，每次状态迁移都必须双侧等待**。
+- 门禁：全套 -race 51.2s ✓ / smoke PASS ✓ / GDI+光标断言 ✓。
+
 ### R68（2026-10-27）
 - 修 CI Linux 编译断（26fb54a 起两个红）：AutostartEnable 改双返回值时只
   改了 autostart_windows.go，autostart_other.go 桩仍是旧单值签名——本地

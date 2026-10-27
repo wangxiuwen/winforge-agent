@@ -18,6 +18,7 @@ var (
 	screenGdi32         = windows.NewLazySystemDLL("gdi32.dll")
 	procGetDC           = user32.NewProc("GetDC")
 	procReleaseDC       = user32.NewProc("ReleaseDC")
+	procGetCursorPosScr = user32.NewProc("GetCursorPos")
 	procCreateCompatibleDC = screenGdi32.NewProc("CreateCompatibleDC")
 	procDeleteDC           = screenGdi32.NewProc("DeleteDC")
 	procCreateDIBSection   = screenGdi32.NewProc("CreateDIBSection")
@@ -112,6 +113,7 @@ func captureScreenGDI(maxW, quality int) ([]byte, int, int, error) {
 		img.Pix[j+2] = pix[i+0] // B
 		img.Pix[j+3] = 0xFF
 	}
+	drawCursorMarker(img, swI, shI, int(outW), int(outH))
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, 0, 0, err
@@ -124,3 +126,40 @@ type screenCaptureError string
 func (e screenCaptureError) Error() string { return string(e) }
 
 func errScreenCapture(msg string) error { return screenCaptureError(msg) }
+
+type pointScr struct{ X, Y int32 }
+
+// drawCursorMarker 把被控端物理光标（即控制者移动的光标）画成白边红点，
+// 让控制端有位置反馈。sw/sh 为抓屏时的屏幕原尺寸（光标是屏幕坐标）。
+func drawCursorMarker(img *image.RGBA, sw, sh int32, outW, outH int) {
+	var pt pointScr
+	// 注意：LazyProc.Call 的 err 是 GetLastError，成功时也常非 nil——必须判 r1。
+	if r1, _, _ := procGetCursorPosScr.Call(uintptr(unsafe.Pointer(&pt))); r1 == 0 {
+		return
+	}
+	if sw <= 0 || sh <= 0 {
+		return
+	}
+	cx := int(float64(pt.X) / float64(sw) * float64(outW))
+	cy := int(float64(pt.Y) / float64(sh) * float64(outH))
+	const rOuter, rInner = 9, 5 // 白边红心
+	b := img.Rect
+	for dy := -rOuter; dy <= rOuter; dy++ {
+		for dx := -rOuter; dx <= rOuter; dx++ {
+			d2 := dx*dx + dy*dy
+			if d2 > rOuter*rOuter {
+				continue
+			}
+			x, y := cx+dx, cy+dy
+			if x < b.Min.X || x >= b.Max.X || y < b.Min.Y || y >= b.Max.Y {
+				continue
+			}
+			off := img.PixOffset(x, y)
+			if d2 <= rInner*rInner {
+				img.Pix[off+0], img.Pix[off+1], img.Pix[off+2] = 0xE6, 0x2F, 0x2F // 红
+			} else {
+				img.Pix[off+0], img.Pix[off+1], img.Pix[off+2] = 0xFF, 0xFF, 0xFF // 白边
+			}
+		}
+	}
+}

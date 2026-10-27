@@ -19,6 +19,13 @@ func TestHotkeyTogglesControl(t *testing.T) {
 		defer a.mu.Unlock()
 		return a.ctl.Role == roleController
 	})
+	// R59 教训：必须等 B 侧真正被控再按第二次，否则 release 先于 take
+	// 到达会被 B 丢弃（B 卡在被控）。
+	waitFor(t, 5*time.Second, "B 进入被控", func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return b.ctl.Role == roleControlled && b.ctl.PeerID == peerViewsBID(a)
+	})
 
 	a.hotkeyPressed()
 	waitFor(t, 5*time.Second, "再按热键后 A 停止控制", func() bool {
