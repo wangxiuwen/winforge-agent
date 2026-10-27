@@ -165,7 +165,9 @@ type windowsInput struct {
 	injKeys    map[uint32]uint32 // vk -> scan
 	injButtons map[MouseButton]bool
 
-	hotkeyCh chan struct{}
+	hotkeyCh    chan struct{}
+	hotkeyReady chan struct{}
+	hotkeyFail  atomic.Bool
 	escapeCh chan struct{}
 }
 
@@ -177,7 +179,8 @@ type edgeHit struct {
 // NewPlatform 构造 Windows 平台实现并启动钩子线程。
 func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 	wi := &windowsInput{
-		hotkeyCh:   make(chan struct{}, 1),
+		hotkeyCh:    make(chan struct{}, 1),
+		hotkeyReady: make(chan struct{}),
 		escapeCh:   make(chan struct{}, 1),
 		injKeys:    map[uint32]uint32{},
 		injButtons: map[MouseButton]bool{},
@@ -200,7 +203,9 @@ func NewPlatform(hotkey string, logger *log.Logger) *Platform {
 			}, nil
 		},
 		WatchEdges: wi.watchEdges,
-		Hotkey:     wi.hotkeyCh,
+		Hotkey:      wi.hotkeyCh,
+		HotkeyReady: wi.hotkeyReady,
+		HotkeyFailed: func() bool { return wi.hotkeyFail.Load() },
 		Escape:     wi.escapeCh,
 		ScreenBounds: func() ScreenBounds {
 			return wi.screenBounds()
@@ -235,11 +240,14 @@ func (w *windowsInput) startThread(hotkey string, logger *log.Logger) {
 		}
 		w.refreshCenter()
 		mods, vk, ok := parseHotkey(hotkey)
-		if ok {
-			if r, _, _ := procRegisterHotKey.Call(0, 1, uintptr(mods), uintptr(vk)); r == 0 {
-				logger.Printf("热键 %s 注册失败（可能被占用），改用界面按钮切换", hotkey)
-			}
+		if !ok {
+			w.hotkeyFail.Store(true)
+			logger.Printf("热键配置 %q 无法解析，改用界面按钮切换", hotkey)
+		} else if r, _, _ := procRegisterHotKey.Call(0, 1, uintptr(mods), uintptr(vk)); r == 0 {
+			w.hotkeyFail.Store(true)
+			logger.Printf("热键 %s 注册失败（可能被占用），改用界面按钮切换", hotkey)
 		}
+		close(w.hotkeyReady)
 		// 消息循环同时驱动低级钩子与 WM_HOTKEY。
 		var m winMsg
 		for {

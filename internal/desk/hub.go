@@ -40,6 +40,10 @@ type Platform struct {
 	SetControlIndicator func(on bool, controller bool, edge Edge)
 	// CaptureScreen 抓取主屏为 JPEG（宽不超过 maxW；远程桌面用）。可为 nil。
 	CaptureScreen func(maxW, quality int) (jpeg []byte, w, h int, err error)
+	// HotkeyReady 热键注册流程完成信号（成功失败都会关闭）。可为 nil。
+	HotkeyReady <-chan struct{}
+	// HotkeyFailed 热键注册失败（被占用/配置无法解析）。可为 nil。
+	HotkeyFailed func() bool
 }
 
 // 控制角色。

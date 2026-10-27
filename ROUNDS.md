@@ -54,6 +54,17 @@
 
 ## 轮次记录
 
+### R80（2026-10-28）
+- **热键注册失败接入 UI 启动警告**（此前只进日志，用户以为 Ctrl+Alt+D
+  坏了无从知晓）：windowsInput 记录 hotkeyFail（RegisterHotKey 失败或
+  热键配置无法解析），Platform 暴露 HotkeyReady/HotkeyFailed，desk 包
+  新增 HotkeyWarning 助手（等注册结果最多 2s + 返回警告），deskapp.Run
+  并入 startupWarning → UI toast 一次性展示（复用配置损坏警告通道）。
+- 单测 TestHotkeyWarning（nil/失败/成功/超时四分支）；真机复验路径：
+  占用 Ctrl+Alt+D 后启动实例，UI 应弹"热键注册失败…改用界面按钮切换"。
+- 门禁：全套 -race 48.1s ✓ / smoke PASS ✓ / WSL Linux build ✓。
+
+### R79（2026-10-28）
 ### R78（2026-10-28）
 - 首次 50 轮长稳 soak（soak_desk.py 建成后最长一跑）：100 条双向消息 +
   50MB 文件 + 50 次开关共享循环，122s 全过，节奏稳定（2.1-3.0s/轮无劣化），

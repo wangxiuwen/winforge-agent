@@ -82,6 +82,14 @@ func Run(opts Options) error {
 
 	platform := *desk.NewPlatform(cfg.Hotkey, logger)
 	hub := desk.NewHub(cfg, cfgPath, platform, logger)
+	// 热键注册失败此前只进日志，UI 用户无从感知（R80）——接入启动警告。
+	if hkWarn := desk.HotkeyWarning(&platform); hkWarn != "" {
+		if startupWarn != "" {
+			startupWarn += "；" + hkWarn
+		} else {
+			startupWarn = hkWarn
+		}
+	}
 	hub.SetStartupWarning(startupWarn)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
