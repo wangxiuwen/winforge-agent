@@ -54,6 +54,21 @@
 
 ## 轮次记录
 
+### R82（2026-10-28）★Wails 窗口横幅未渲染——待深挖
+- R80 热键警告在 **Wails 桌面窗口未显示**（浏览器模式横幅+toast 正常，
+  截图为证）。症状精确化：设备列表等 render 前半段内容正常渲染，但
+  toast（maybeShow）和横幅（render 尾部）都没出现——**疑似 render 中段
+  抛错中断**（renderContent 或其后、banner 块之前）。
+- 已排除：exe 旧（重建+二进制内嵌资产含 startup-banner/热键警告字串）、
+  hub 侧（同码 CLI 快照 startupWarning 在）、Go 编译（双平台过）。
+- 下轮攻坚：`-tags desktop,dev` 构建（启用 WebView2 DevTools）+
+  WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223 +
+  CDP 看 console 错误（production 构建禁 devtools，9223 拒连即此因）。
+- 影响面评估：startupWarning 当前唯一内容=热键注册失败提示（R80），
+  浏览器模式用户可正常看到；Wails 窗口用户看不到该提示但功能不受影响。
+- 门禁：build ✓（未改代码，验证+记录轮）。
+
+### R81（2026-10-28）
 ### R81（2026-10-28）
 - R80 热键警告的真机验证攻坚（多路并进）：
   ① 独立干净实例（截图证实）：**警告横幅在浏览器模式正常渲染**——前端
