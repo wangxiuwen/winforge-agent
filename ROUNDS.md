@@ -45,6 +45,23 @@
 
 ## 轮次记录
 
+### R46（2026-10-27）
+- ★补 max_file_bytes 边界测试时抓到两个真 bug（TestMaxFileSizeRejected）：
+  1. **拒收不发事件**：onFileReject 只改内部状态+toast，从不 emit
+     desk:transfer——发端 UI 卡片永远停在"请求中"，R43 的传输历史也记不到
+     "rejected"。修复：补 emit（id/dir=rejected）。
+  2. **伪造 fid 可打 nil panic**：toast 在 `t != nil` 判断外解引用 t.Name，
+     对端发未知 fid 的 reject 即 panic（serve 的 safeCall 会拦住不至于崩
+     进程，但读循环死掉=会话断）。修复：toast 移进 known 分支。
+- 新增 Config.SetMaxFileBytes（内存态，测试用边界控制）。
+- UIA 扩展配对弹窗验证：点＋配对 → "配对新设备"标题出现 → 取消关闭。
+  ★修正 R45 的局限描述：JS **新建**的子树 UIA 可见（弹窗标题能读到），
+  看不见的是对**已有节点**的文本改写（热键文案/列表项更新）。
+- 门禁：新单测 ✓ / desk 全套 -race 19.3s ✓ / go test ./... 仅 internal/agent
+  已知 Windows 存量失败 / smoke PASS。桌面端已重部署（reject 修复生效）。
+- 教训：写边界测试不是"补覆盖率"——拒收路径从未被任何测试走到，一走就
+  掉出两个 bug；协议消息的每个分支都该有"对端状态如何感知"的断言。
+
 ### R45（2026-10-27）
 - R37 的 ad-hoc UIA 验证固化为仓库资产 `uia_desk.py`：自行 go build
   （desktop,production tags）→ 临时配置（端口全 0）+ --no-tray 起真 GUI

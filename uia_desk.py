@@ -120,6 +120,24 @@ def main():
         click_tab("传输", ["发送", "打开接收目录", "给对方发条消息"])
         click_tab("控制", ["空闲", "推过对应屏幕边缘"])
         click_tab("共享", ["＋配对"])
+
+        # 配对弹窗：＋配对 → modal 出现 → 取消关闭（JS 动态创建的子树，
+        # 若 WebView2 a11y 不暴露则降级为 info，见下方已知局限注释）
+        pair_btns = [c for c in w.descendants()
+                     if c.element_info.name == "＋配对" and c.element_info.control_type == "Button"]
+        if pair_btns:
+            pair_btns[0].click_input()
+            time.sleep(1.2)
+            shown = wait_name(w, "配对新设备", timeout=4)
+            print(("[ok] " if shown else "[FAIL] ") + "配对弹窗: 标题出现")
+            ok = ok and shown
+            cancel = [c for c in w.descendants() if c.element_info.name == "取消"]
+            if cancel:
+                cancel[0].click_input()
+                time.sleep(0.8)
+        else:
+            print("[FAIL] 找不到 ＋配对 按钮")
+            ok = False
     finally:
         subprocess.run(["taskkill", "/F", "/PID", str(proc.pid)],
                        capture_output=True)

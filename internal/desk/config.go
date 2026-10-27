@@ -260,6 +260,9 @@ func (c *Config) HotkeyV() string       { c.mu.Lock(); defer c.mu.Unlock(); retu
 func (c *Config) DownloadsDirV() string { c.mu.Lock(); defer c.mu.Unlock(); return c.DownloadsDir }
 func (c *Config) MaxFileBytesV() int64  { c.mu.Lock(); defer c.mu.Unlock(); return c.MaxFileBytes }
 
+// SetMaxFileBytes 运行时更新传输上限（只改内存，不落盘）。
+func (c *Config) SetMaxFileBytes(v int64) { c.mu.Lock(); c.MaxFileBytes = v; c.mu.Unlock() }
+
 // newID 生成 16 字节随机 hex。
 func newID() (string, error) {
 	b := make([]byte, 16)

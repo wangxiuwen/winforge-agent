@@ -207,15 +207,25 @@ func (h *Hub) onFileReject(s *Session, m wireMsg) {
 		copy(id[:], b)
 		h.mu.Lock()
 		t := h.out[id]
-		if t != nil && t.Peer == s.peer.ID {
+		known := t != nil && t.Peer == s.peer.ID
+		if known {
 			if t.file != nil {
 				_ = t.file.Close()
 			}
 			t.State = "rejected"
 			delete(h.out, id)
 		}
+		var name string
+		if known {
+			name = t.Name
+		}
 		h.mu.Unlock()
-		h.toast("warn", "对方拒收了 "+t.Name)
+		if known {
+			h.emit("desk:transfer", map[string]interface{}{
+				"id": hex.EncodeToString(id[:]), "dir": "out", "state": "rejected",
+			})
+			h.toast("warn", "对方拒收了 "+name)
+		}
 	}
 }
 
